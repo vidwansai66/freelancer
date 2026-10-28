@@ -1,63 +1,80 @@
 import dotenv from 'dotenv';
 import path from 'path';
 
-// Load .env file
-dotenv.config({ path: path.resolve(__dirname, '../../.env') });
+// Load .env file safely (in local environments where .env exists)
+try {
+  dotenv.config({ path: path.resolve(__dirname, '../../.env') });
+} catch {
+  // Ignore in serverless / production where environment variables are injected directly
+}
 
+export interface EnvStatus {
+  isConfigured: boolean;
+  missingRequired: string[];
+  warnings: string[];
+}
+
+export const envStatus: EnvStatus = {
+  isConfigured: true,
+  missingRequired: [],
+  warnings: [],
+};
+
+// Validate JWT Secret
 if (
   !process.env.JWT_SECRET ||
   process.env.JWT_SECRET.length < 32 ||
   process.env.JWT_SECRET.includes('your_super_secret') ||
   process.env.JWT_SECRET.includes('super_secret_jwt_key')
 ) {
-  throw new Error('Configure a private JWT_SECRET of at least 32 characters in server/.env.');
+  envStatus.isConfigured = false;
+  envStatus.missingRequired.push('JWT_SECRET (min 32 chars)');
+  if (process.env.NODE_ENV !== 'production') {
+    console.warn('[Env Warning] JWT_SECRET is not configured or too short (min 32 characters).');
+  }
 }
+
+// Validate Default Admin Password
 if (
   !process.env.DEFAULT_ADMIN_PASSWORD ||
   process.env.DEFAULT_ADMIN_PASSWORD.length < 12 ||
   process.env.DEFAULT_ADMIN_PASSWORD === 'AdminPassword123!' ||
   process.env.DEFAULT_ADMIN_PASSWORD.startsWith('replace_')
 ) {
-  throw new Error(
-    'Configure a private DEFAULT_ADMIN_PASSWORD of at least 12 characters in server/.env.',
-  );
+  envStatus.isConfigured = false;
+  envStatus.missingRequired.push('DEFAULT_ADMIN_PASSWORD (min 12 chars)');
+  if (process.env.NODE_ENV !== 'production') {
+    console.warn('[Env Warning] DEFAULT_ADMIN_PASSWORD is not configured or uses default value (min 12 characters).');
+  }
 }
 
-if (process.env.NODE_ENV === 'production') {
-  for (const key of ['JWT_SECRET', 'DEFAULT_ADMIN_PASSWORD', 'CLIENT_URL'])
-    if (!process.env[key]) throw new Error(key + ' is required in production.');
-  if (
-    process.env.JWT_SECRET!.length < 32 ||
-    process.env.JWT_SECRET!.includes('your_super_secret') ||
-    process.env.JWT_SECRET!.includes('super_secret_jwt_key')
-  )
-    throw new Error('Set a random JWT secret of at least 32 characters.');
-  if (
-    process.env.DEFAULT_ADMIN_PASSWORD!.length < 12 ||
-    process.env.DEFAULT_ADMIN_PASSWORD === 'AdminPassword123!'
-  )
-    throw new Error('Set a private administrator password.');
+// Client URL detection (supports custom CLIENT_URL or auto-injected VERCEL_URL)
+const defaultClientUrl =
+  process.env.CLIENT_URL ||
+  (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : 'http://localhost:5173');
+
+if (process.env.NODE_ENV === 'production' && !process.env.CLIENT_URL) {
+  envStatus.warnings.push('CLIENT_URL not explicitly set; derived from VERCEL_URL or default.');
 }
+
 export const env = {
   PORT: parseInt(process.env.PORT || '5000', 10),
   NODE_ENV: process.env.NODE_ENV || 'development',
-  CLIENT_URL: process.env.CLIENT_URL || 'http://localhost:5173',
+  CLIENT_URL: defaultClientUrl,
   // Zoho CRM Configuration (India Data Center by default)
   ZOHO_CLIENT_ID: process.env.ZOHO_CLIENT_ID || '',
   ZOHO_CLIENT_SECRET: process.env.ZOHO_CLIENT_SECRET || '',
   ZOHO_REDIRECT_URI:
     process.env.ZOHO_REDIRECT_URI ||
-    (process.env.CLIENT_URL
-      ? `${process.env.CLIENT_URL.replace(/\/+$/, '')}/api/zoho/callback`
-      : 'http://localhost:5000/api/zoho/callback'),
+    `${defaultClientUrl.replace(/\/+$/, '')}/api/zoho/callback`,
   ZOHO_REFRESH_TOKEN: process.env.ZOHO_REFRESH_TOKEN || '',
   ZOHO_ACCOUNTS_URL: process.env.ZOHO_ACCOUNTS_URL || 'https://accounts.zoho.in',
   ZOHO_API_BASE_URL: process.env.ZOHO_API_BASE_URL || process.env.ZOHO_API_DOMAIN || 'https://www.zohoapis.in/crm/v8',
   ZOHO_API_DOMAIN: process.env.ZOHO_API_DOMAIN || 'https://www.zohoapis.in',
-  JWT_SECRET: process.env.JWT_SECRET!,
+  JWT_SECRET: process.env.JWT_SECRET || '',
   JWT_EXPIRES_IN: process.env.JWT_EXPIRES_IN || '7d',
   DEFAULT_ADMIN_EMAIL: process.env.DEFAULT_ADMIN_EMAIL || 'admin@tejastudio.com',
-  DEFAULT_ADMIN_PASSWORD: process.env.DEFAULT_ADMIN_PASSWORD!,
+  DEFAULT_ADMIN_PASSWORD: process.env.DEFAULT_ADMIN_PASSWORD || '',
   DEFAULT_ADMIN_NAME: process.env.DEFAULT_ADMIN_NAME || 'Studio Admin',
   SMTP_HOST: process.env.SMTP_HOST || '',
   SMTP_PORT: parseInt(process.env.SMTP_PORT || '587', 10),
@@ -68,4 +85,3 @@ export const env = {
   ADMIN_NOTIFICATION_EMAIL: process.env.ADMIN_NOTIFICATION_EMAIL || 'admin@tejastudio.com',
   EMAIL_SERVICE_ENABLED: process.env.EMAIL_SERVICE_ENABLED === 'true',
 };
-

@@ -3,7 +3,7 @@ import express, { Request, Response } from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
 import morgan from 'morgan';
-import { env } from './config/env';
+import { env, envStatus } from './config/env';
 import apiRoutes from './routes/apiRoutes';
 import { errorHandler } from './middleware/errorHandler';
 import { generalApiLimiter } from './middleware/rateLimiter';
@@ -14,16 +14,30 @@ const app = express();
 // Security headers
 app.use(helmet());
 
+const isAllowedOrigin = (origin?: string): boolean => {
+  if (!origin) return true;
+  if (origin === env.CLIENT_URL) return true;
+  try {
+    const url = new URL(origin);
+    if (url.hostname.endsWith('.vercel.app') || url.hostname === 'localhost') {
+      return true;
+    }
+  } catch {
+    // invalid URL format
+  }
+  return false;
+};
+
 // Cross-origin resource sharing
 app.use(
   cors({
-    origin: (origin, callback) => callback(null, !origin || origin === env.CLIENT_URL),
+    origin: (origin, callback) => callback(null, isAllowedOrigin(origin)),
     credentials: true,
   }),
 );
 
-// Logging
-if (env.NODE_ENV !== 'test') {
+// Logging: Only run morgan in local standalone development
+if (env.NODE_ENV === 'development' && !process.env.VERCEL) {
   app.use(morgan('dev'));
 }
 
@@ -33,9 +47,10 @@ app.use((req, res, next) => {
   if (
     !['GET', 'HEAD', 'OPTIONS'].includes(req.method) &&
     req.headers.origin &&
-    req.headers.origin !== env.CLIENT_URL
-  )
+    !isAllowedOrigin(req.headers.origin)
+  ) {
     return void sendError(res, 'Origin not allowed.', 403);
+  }
   next();
 });
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
@@ -51,6 +66,11 @@ app.get('/health', (_req: Request, res: Response) => {
     service: 'Freelance Studio API',
     database: 'Zero-Cost Static & Edge Architecture',
     crm: crmStatus,
+    env: {
+      configured: envStatus.isConfigured,
+      missing: envStatus.missingRequired,
+      warnings: envStatus.warnings,
+    },
   });
 });
 

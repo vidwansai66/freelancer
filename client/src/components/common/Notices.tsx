@@ -2,7 +2,16 @@ import { useEffect, useState } from 'react';
 export function Notices() {
   const [message, setMessage] = useState('');
   useEffect(() => {
-    const handler = (event: Event) => setMessage((event as CustomEvent).detail);
+    const handler = (event: Event) => {
+      const detail = (event as CustomEvent).detail;
+      if (typeof detail === 'string') {
+        setMessage(detail);
+      } else if (detail && typeof detail === 'object') {
+        setMessage(detail.message || detail.error || JSON.stringify(detail));
+      } else {
+        setMessage(String(detail || ''));
+      }
+    };
     window.addEventListener('api-error', handler);
     return () => window.removeEventListener('api-error', handler);
   }, []);

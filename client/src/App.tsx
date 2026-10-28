@@ -54,9 +54,48 @@ import { AdminSettingsPage } from './pages/admin/AdminSettingsPage';
 
 import { SmoothScroll } from './components/common/SmoothScroll';
 
+class AppErrorBoundary extends React.Component<
+  { children: React.ReactNode },
+  { hasError: boolean; error: string }
+> {
+  constructor(props: any) {
+    super(props);
+    this.state = { hasError: false, error: '' };
+  }
+  static getDerivedStateFromError(error: any) {
+    return { hasError: true, error: error?.message || String(error) };
+  }
+  componentDidCatch(error: any, info: any) {
+    console.error('[App Crash Caught by Boundary]:', error, info);
+  }
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div className="min-h-screen bg-[#070908] text-white flex items-center justify-center p-6 text-center">
+          <div className="max-w-md bg-[#0d120f] border border-emerald-900/40 p-8 rounded-2xl shadow-2xl">
+            <h1 className="text-xl font-bold text-emerald-400 mb-2">Something went wrong</h1>
+            <p className="text-sm text-neutral-400 mb-6">{this.state.error}</p>
+            <button
+              onClick={() => {
+                this.setState({ hasError: false, error: '' });
+                window.location.reload();
+              }}
+              className="px-5 py-2.5 bg-emerald-500 hover:bg-emerald-400 text-black font-semibold rounded-xl text-sm transition"
+            >
+              Reload Page
+            </button>
+          </div>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
+
 export function App() {
   return (
-    <Router>
+    <AppErrorBoundary>
+      <Router>
       <ThemeProvider>
         <SmoothScroll>
           <SettingsProvider>
@@ -118,6 +157,7 @@ export function App() {
         </SmoothScroll>
       </ThemeProvider>
     </Router>
+    </AppErrorBoundary>
   );
 }
 

@@ -26,15 +26,21 @@ api.interceptors.response.use(
       localStorage.removeItem('studio_admin_user');
       window.location.href = '/admin/login';
     }
-    if (error.response?.status !== 401)
+    if (error.response?.status !== 401) {
+      const data = error.response?.data;
+      let rawMsg =
+        (typeof data?.error === 'string' ? data.error : null) ||
+        (typeof data?.message === 'string' ? data.message : null) ||
+        (data?.error?.message ? String(data.error.message) : null) ||
+        (typeof data === 'string' ? data : null) ||
+        error.message ||
+        'The server could not complete this request.';
       window.dispatchEvent(
         new CustomEvent('api-error', {
-          detail:
-            error.response?.data?.error ||
-            error.response?.data?.message ||
-            'The server could not complete this request.',
+          detail: String(rawMsg),
         }),
       );
+    }
     return Promise.reject(error);
   },
 );
