@@ -47,3 +47,4 @@ playwright-report/
 .vercel/
 .vercel
 .env*
+backups/

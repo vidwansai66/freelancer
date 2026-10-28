@@ -115,12 +115,12 @@ export const ContactPage: React.FC = () => {
                 <div>
                   <span className="text-xs text-muted-foreground block">WhatsApp Direct Chat</span>
                   <a
-                    href="https://wa.me/1234567890?text=Hello%20Teja%20Web%20Studio"
+                    href="https://wa.me/919490955048?text=Hello%20Teja%20Web%20Studio"
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="text-sm font-semibold text-white hover:text-[#25D366] transition-colors"
+                    className="text-sm font-semibold text-foreground hover:text-[#25D366] transition-colors"
                   >
-                    +1 (234) 567-890
+                    +91 94909 55048
                   </a>
                 </div>
               </div>

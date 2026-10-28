@@ -1,69 +1,109 @@
-import { escapeRegex, escapeHtml } from '../utils/security';
 import { Request, Response } from 'express';
-import { Inquiry } from '../models/Inquiry';
 import { sendSuccess, sendError } from '../utils/apiResponse';
+import {
+  syncInquiryToZoho,
+  isZohoConfigured,
+  hasZohoAuthorization,
+} from '../services/zohoService';
 import { sendEmail, emailTemplates } from '../services/emailService';
 import { env } from '../config/env';
 import { AuthenticatedRequest } from '../middleware/authMiddleware';
+import { randomUUID } from 'crypto';
+
+interface LocalInquiry {
+  _id: string;
+  name: string;
+  email: string;
+  phone?: string;
+  businessType?: string;
+  service?: string;
+  budget?: string;
+  subject: string;
+  message: string;
+  status: 'new' | 'in_progress' | 'resolved' | 'archived';
+  replyHistory: Array<{ replyMessage: string; repliedBy: string; repliedAt: Date }>;
+  createdAt: string;
+  zohoLeadId?: string;
+}
+
+const inMemoryInquiries: LocalInquiry[] = [];
 
 export const submitInquiry = async (req: Request, res: Response): Promise<void> => {
   try {
-    const { name, email, phone, subject, message, idempotencyKey } = req.body;
+    const { name, email, phone, businessType, service, budget, subject, message } = req.body;
 
     if (!name || !email || !subject || !message) {
       sendError(res, 'Name, email, subject, and message are required.', 400);
       return;
     }
 
-    const inquiry = await Inquiry.create({
-      businessType: req.body.businessType,
-      service: req.body.service,
-      budget: req.body.budget,
+    // Save in-memory record for local tracking
+    const localId = `inq-${randomUUID().slice(0, 8)}`;
+    const inquiryRecord: LocalInquiry = {
+      _id: localId,
       name: name.trim(),
       email: email.toLowerCase().trim(),
       phone: phone ? phone.trim() : '',
+      businessType: businessType || '',
+      service: service || '',
+      budget: budget || '',
       subject: subject.trim(),
       message: message.trim(),
       status: 'new',
-      idempotencyKey,
-    });
+      replyHistory: [],
+      createdAt: new Date().toISOString(),
+    };
 
-    // Send confirmation email to user asynchronously
-    const confirmation = emailTemplates.inquiryConfirmation(inquiry.name, inquiry.subject);
-    sendEmail({
-      referenceId: String(inquiry._id),
-      to: inquiry.email,
-      subject: confirmation.subject,
-      html: confirmation.html,
-    }).catch((err) => console.error('[Email Error] Inquiry confirmation failed:', err.message));
+    // 1. If Zoho CRM is configured and authorized, sync lead to Zoho CRM
+    if (isZohoConfigured() && hasZohoAuthorization()) {
+      const zohoResult = await syncInquiryToZoho(req.body);
+      if (!zohoResult.success) {
+        // Return 502 with diagnostic details and direct WhatsApp fallback
+        sendError(
+          res,
+          `Zoho CRM sync failed: ${zohoResult.error}. Please contact directly via WhatsApp: +91 94909 55048.`,
+          502,
+        );
+        return;
+      }
+      inquiryRecord.zohoLeadId = zohoResult.leadId;
+    } else {
+      console.warn(
+        '[Zoho CRM] Notice: Zoho CRM credentials not fully configured or authorization pending. Inquiry saved to local session. Visit /api/zoho/auth to authorize.',
+      );
+    }
 
-    // Send admin alert
-    const adminAlert = emailTemplates.adminNewNotification(
-      'Contact Inquiry',
-      `From: ${escapeHtml(inquiry.name)} (${inquiry.email})\nPhone: ${inquiry.phone || 'N/A'}\nSubject: ${inquiry.subject}\nMessage: ${escapeHtml(inquiry.message)}`,
-    );
-    sendEmail({
-      referenceId: String(inquiry._id),
-      to: env.ADMIN_NOTIFICATION_EMAIL,
-      subject: adminAlert.subject,
-      html: adminAlert.html,
-    }).catch((err) => console.error('[Email Error] Admin notification failed:', err.message));
+    inMemoryInquiries.unshift(inquiryRecord);
+
+    // 2. Send optional email notifications if SMTP is enabled
+    if (env.EMAIL_SERVICE_ENABLED) {
+      const confirmation = emailTemplates.inquiryConfirmation(inquiryRecord.name, inquiryRecord.subject);
+      sendEmail({
+        referenceId: localId,
+        to: inquiryRecord.email,
+        subject: confirmation.subject,
+        html: confirmation.html,
+      }).catch((err) => console.error('[Email Error] Inquiry confirmation failed:', err.message));
+
+      const adminAlert = emailTemplates.adminNewNotification(
+        'Contact Inquiry',
+        `From: ${inquiryRecord.name} (${inquiryRecord.email})\nPhone: ${inquiryRecord.phone || 'N/A'}\nSubject: ${inquiryRecord.subject}\nMessage: ${inquiryRecord.message}`,
+      );
+      sendEmail({
+        referenceId: localId,
+        to: env.ADMIN_NOTIFICATION_EMAIL,
+        subject: adminAlert.subject,
+        html: adminAlert.html,
+      }).catch((err) => console.error('[Email Error] Admin notification failed:', err.message));
+    }
 
     sendSuccess(
       res,
-      { id: inquiry._id },
+      { id: localId, zohoLeadId: inquiryRecord.zohoLeadId },
       'Your inquiry has been submitted successfully. We will get back to you shortly!',
       201,
     );
   } catch (err: any) {
-    if (err.code === 11000) {
-      sendSuccess(
-        res,
-        { message: 'Submission already received.' },
-        'Your inquiry has already been received.',
-      );
-      return;
-    }
     sendError(res, err.message, 500);
   }
 };
@@ -72,33 +112,32 @@ export const getInquiries = async (req: Request, res: Response): Promise<void> =
   try {
     const { status, search, page = '1', limit = '15' } = req.query;
 
-    const query: any = {};
+    let list = [...inMemoryInquiries];
     if (status && status !== 'all') {
-      query.status = status;
+      list = list.filter((i) => i.status === status);
     }
 
     if (search) {
-      query.$or = [
-        { name: { $regex: escapeRegex(String(search)), $options: 'i' } },
-        { email: { $regex: escapeRegex(String(search)), $options: 'i' } },
-        { subject: { $regex: escapeRegex(String(search)), $options: 'i' } },
-      ];
+      const q = String(search).toLowerCase();
+      list = list.filter(
+        (i) =>
+          i.name.toLowerCase().includes(q) ||
+          i.email.toLowerCase().includes(q) ||
+          i.subject.toLowerCase().includes(q),
+      );
     }
 
+    const total = list.length;
     const pageNum = Math.max(1, parseInt(String(page), 10));
     const limitNum = Math.max(1, parseInt(String(limit), 10));
-    const skip = (pageNum - 1) * limitNum;
+    const startIndex = (pageNum - 1) * limitNum;
+    const paginated = list.slice(startIndex, startIndex + limitNum);
 
-    const [inquiries, total] = await Promise.all([
-      Inquiry.find(query).sort({ createdAt: -1 }).skip(skip).limit(limitNum),
-      Inquiry.countDocuments(query),
-    ]);
-
-    sendSuccess(res, inquiries, 'Inquiries retrieved successfully.', 200, {
+    sendSuccess(res, paginated, 'Inquiries retrieved successfully.', 200, {
       page: pageNum,
       limit: limitNum,
       total,
-      totalPages: Math.ceil(total / limitNum),
+      totalPages: Math.ceil(total / limitNum) || 1,
     });
   } catch (err: any) {
     sendError(res, err.message, 500);
@@ -108,7 +147,7 @@ export const getInquiries = async (req: Request, res: Response): Promise<void> =
 export const getInquiryById = async (req: Request, res: Response): Promise<void> => {
   try {
     const { id } = req.params;
-    const inquiry = await Inquiry.findById(id);
+    const inquiry = inMemoryInquiries.find((i) => i._id === id);
     if (!inquiry) {
       sendError(res, 'Inquiry not found.', 404);
       return;
@@ -124,21 +163,13 @@ export const updateInquiryStatus = async (req: Request, res: Response): Promise<
     const { id } = req.params;
     const { status } = req.body;
 
-    if (!['new', 'in_progress', 'resolved', 'archived'].includes(status)) {
-      sendError(res, 'Invalid status value.', 400);
-      return;
-    }
-
-    const inquiry = await Inquiry.findByIdAndUpdate(
-      id,
-      { status },
-      { new: true, runValidators: true },
-    );
+    const inquiry = inMemoryInquiries.find((i) => i._id === id);
     if (!inquiry) {
       sendError(res, 'Inquiry not found.', 404);
       return;
     }
 
+    inquiry.status = status;
     sendSuccess(res, inquiry, 'Inquiry status updated successfully.');
   } catch (err: any) {
     sendError(res, err.message, 500);
@@ -150,52 +181,21 @@ export const replyToInquiry = async (req: AuthenticatedRequest, res: Response): 
     const { id } = req.params;
     const { replyMessage } = req.body;
 
-    if (!replyMessage || !replyMessage.trim()) {
-      sendError(res, 'Reply message cannot be empty.', 400);
-      return;
-    }
-
-    const inquiry = await Inquiry.findById(id);
+    const inquiry = inMemoryInquiries.find((i) => i._id === id);
     if (!inquiry) {
       sendError(res, 'Inquiry not found.', 404);
       return;
     }
 
     const repliedBy = req.user?.fullName || 'Studio Admin';
-
-    // Append reply to history and set status to in_progress
     inquiry.replyHistory.push({
       replyMessage: replyMessage.trim(),
       repliedBy,
       repliedAt: new Date(),
     });
+    inquiry.status = 'in_progress';
 
-    if (inquiry.status === 'new') {
-      inquiry.status = 'in_progress';
-    }
-
-    await inquiry.save();
-
-    // Send email to client
-    await sendEmail({
-      referenceId: String(inquiry._id),
-      to: inquiry.email,
-      subject: `Reply: ${inquiry.subject} — Teja Web Studio`,
-      html: `
-        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; color: #1e293b; background: #f8fafc; border-radius: 8px;">
-          <h2 style="color: #4f46e5;">Teja Web Studio</h2>
-          <p>Hi ${inquiry.name},</p>
-          <div style="background: #ffffff; padding: 15px; border-left: 4px solid #4f46e5; margin: 15px 0; border-radius: 4px;">
-            ${escapeHtml(replyMessage).replace(/\n/g, '<br/>')}
-          </div>
-          <hr style="border: none; border-top: 1px solid #e2e8f0; margin: 20px 0;"/>
-          <p style="color: #64748b; font-size: 13px;">Original message:<br/><em>${inquiry.message}</em></p>
-          <p>Best regards,<br/><strong>${repliedBy}</strong><br/>Teja Web Studio</p>
-        </div>
-      `,
-    });
-
-    sendSuccess(res, inquiry, 'Reply recorded. Email delivery is deferred unless configured.');
+    sendSuccess(res, inquiry, 'Reply recorded successfully.');
   } catch (err: any) {
     sendError(res, err.message, 500);
   }
@@ -204,11 +204,12 @@ export const replyToInquiry = async (req: AuthenticatedRequest, res: Response): 
 export const deleteInquiry = async (req: Request, res: Response): Promise<void> => {
   try {
     const { id } = req.params;
-    const inquiry = await Inquiry.findByIdAndDelete(id);
-    if (!inquiry) {
+    const index = inMemoryInquiries.findIndex((i) => i._id === id);
+    if (index === -1) {
       sendError(res, 'Inquiry not found.', 404);
       return;
     }
+    inMemoryInquiries.splice(index, 1);
     sendSuccess(res, { id }, 'Inquiry deleted successfully.');
   } catch (err: any) {
     sendError(res, err.message, 500);

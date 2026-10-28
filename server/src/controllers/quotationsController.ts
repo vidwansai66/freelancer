@@ -1,12 +1,34 @@
-import { escapeRegex } from '../utils/security';
-import mongoose from 'mongoose';
-import { Upload } from '../models/Upload';
-import { hashToken } from '../utils/security';
 import { Request, Response } from 'express';
-import { QuotationRequest } from '../models/QuotationRequest';
 import { sendSuccess, sendError } from '../utils/apiResponse';
+import {
+  syncQuotationToZoho,
+  isZohoConfigured,
+  hasZohoAuthorization,
+} from '../services/zohoService';
 import { sendEmail, emailTemplates } from '../services/emailService';
 import { env } from '../config/env';
+import { randomUUID } from 'crypto';
+
+interface LocalQuotation {
+  _id: string;
+  name: string;
+  email: string;
+  phone?: string;
+  company?: string;
+  businessType?: string;
+  projectType: string;
+  budgetRange: string;
+  timeline: string;
+  requiredFeatures: string[];
+  description: string;
+  status: 'new' | 'reviewed' | 'quoted' | 'declined';
+  estimatedQuote?: number;
+  notes?: string;
+  createdAt: string;
+  zohoLeadId?: string;
+}
+
+const inMemoryQuotations: LocalQuotation[] = [];
 
 export const submitQuotation = async (req: Request, res: Response): Promise<void> => {
   try {
@@ -15,12 +37,12 @@ export const submitQuotation = async (req: Request, res: Response): Promise<void
       email,
       phone,
       company,
+      businessType,
       projectType,
       budgetRange,
       timeline,
       requiredFeatures,
       description,
-      idempotencyKey,
     } = req.body;
 
     if (!name || !email || !projectType || !budgetRange || !timeline || !description) {
@@ -32,107 +54,77 @@ export const submitQuotation = async (req: Request, res: Response): Promise<void
       return;
     }
 
-    if (idempotencyKey) {
-      const previous = await QuotationRequest.findOne({ idempotencyKey });
-      if (previous) {
-        sendSuccess(res, { id: previous._id }, 'Quotation request already received.');
+    const localId = `quote-${randomUUID().slice(0, 8)}`;
+    const quotationRecord: LocalQuotation = {
+      _id: localId,
+      name: name.trim(),
+      email: email.toLowerCase().trim(),
+      phone: phone ? phone.trim() : '',
+      company: company ? company.trim() : '',
+      businessType: businessType || '',
+      projectType,
+      budgetRange,
+      timeline,
+      requiredFeatures: Array.isArray(requiredFeatures) ? requiredFeatures : [],
+      description: description.trim(),
+      status: 'new',
+      createdAt: new Date().toISOString(),
+    };
+
+    // 1. If Zoho CRM is configured and authorized, sync quotation to Zoho CRM
+    if (isZohoConfigured() && hasZohoAuthorization()) {
+      const zohoResult = await syncQuotationToZoho(req.body);
+      if (!zohoResult.success) {
+        sendError(
+          res,
+          `Zoho CRM sync failed: ${zohoResult.error}. Please contact directly via WhatsApp: +91 94909 55048.`,
+          502,
+        );
         return;
       }
-    }
-    const files = req.body.attachments || [];
-    if (new Set(files.map((file: any) => file.fileId)).size !== files.length) {
-      sendError(res, 'Duplicate attachment.', 400);
-      return;
-    }
-    const session = await mongoose.startSession();
-    let quotation: any;
-    try {
-      await session.withTransaction(async () => {
-        const owned = [];
-        for (const file of files) {
-          const record = await Upload.findOne({
-            _id: file.fileId,
-            claimHash: hashToken(file.token),
-            owner: { $exists: false },
-            visibility: 'private',
-          }).session(session);
-          if (!record)
-            throw Object.assign(new Error('Attachment is unavailable or already used.'), {
-              statusCode: 400,
-            });
-          owned.push(record);
-        }
-        [quotation] = await QuotationRequest.create(
-          [
-            {
-              name: name.trim(),
-              email: email.toLowerCase().trim(),
-              phone: phone ? phone.trim() : '',
-              company: company ? company.trim() : '',
-              projectType,
-              budgetRange,
-              timeline,
-              requiredFeatures: Array.isArray(requiredFeatures) ? requiredFeatures : [],
-              description: description.trim(),
-              status: 'new',
-              businessType: req.body.businessType,
-              attachments: files.map((file: any) => file.fileId),
-              idempotencyKey,
-            },
-          ],
-          { session },
-        );
-        for (const record of owned) {
-          record.owner = quotation._id;
-          record.expiresAt = undefined;
-          await record.save({ session });
-        }
-      });
-    } finally {
-      await session.endSession();
+      quotationRecord.zohoLeadId = zohoResult.leadId;
+    } else {
+      console.warn(
+        '[Zoho CRM] Notice: Zoho CRM credentials not fully configured or authorization pending. Quotation saved to local session. Visit /api/zoho/auth to authorize.',
+      );
     }
 
-    // Send confirmation email to client
-    const confirmation = emailTemplates.quotationConfirmation(
-      quotation.name,
-      quotation.projectType,
-      quotation.budgetRange,
-    );
-    sendEmail({
-      referenceId: String(quotation._id),
-      to: quotation.email,
-      subject: confirmation.subject,
-      html: confirmation.html,
-    }).catch((err) => console.error('[Email Error] Quotation confirmation failed:', err.message));
+    inMemoryQuotations.unshift(quotationRecord);
 
-    // Send alert to admin
-    const adminAlert = emailTemplates.adminNewNotification(
-      'Quotation Request',
-      `Client: ${quotation.name} (${quotation.email})\nCompany: ${quotation.company || 'N/A'}\nPhone: ${quotation.phone || 'N/A'}\nProject: ${quotation.projectType}\nBudget: ${quotation.budgetRange}\nTimeline: ${quotation.timeline}\nFeatures: ${quotation.requiredFeatures.join(', ')}\nDescription: ${quotation.description}`,
-    );
-    sendEmail({
-      referenceId: String(quotation._id),
-      to: env.ADMIN_NOTIFICATION_EMAIL,
-      subject: adminAlert.subject,
-      html: adminAlert.html,
-    }).catch((err) => console.error('[Email Error] Admin notification failed:', err.message));
+    // 2. Send optional email notifications if SMTP is enabled
+    if (env.EMAIL_SERVICE_ENABLED) {
+      const confirmation = emailTemplates.quotationConfirmation(
+        quotationRecord.name,
+        quotationRecord.projectType,
+        quotationRecord.budgetRange,
+      );
+      sendEmail({
+        referenceId: localId,
+        to: quotationRecord.email,
+        subject: confirmation.subject,
+        html: confirmation.html,
+      }).catch((err) => console.error('[Email Error] Quotation confirmation failed:', err.message));
+
+      const adminAlert = emailTemplates.adminNewNotification(
+        'Quotation Request',
+        `Client: ${quotationRecord.name} (${quotationRecord.email})\nCompany: ${quotationRecord.company || 'N/A'}\nPhone: ${quotationRecord.phone || 'N/A'}\nProject: ${quotationRecord.projectType}\nBudget: ${quotationRecord.budgetRange}\nTimeline: ${quotationRecord.timeline}\nFeatures: ${quotationRecord.requiredFeatures.join(', ')}\nDescription: ${quotationRecord.description}`,
+      );
+      sendEmail({
+        referenceId: localId,
+        to: env.ADMIN_NOTIFICATION_EMAIL,
+        subject: adminAlert.subject,
+        html: adminAlert.html,
+      }).catch((err) => console.error('[Email Error] Admin notification failed:', err.message));
+    }
 
     sendSuccess(
       res,
-      { id: quotation._id },
+      { id: localId, zohoLeadId: quotationRecord.zohoLeadId },
       'Your quotation request has been received. We will prepare your proposal within 24-48 hours!',
       201,
     );
   } catch (err: any) {
-    if (err.code === 11000) {
-      sendSuccess(
-        res,
-        { message: 'Quotation request already received.' },
-        'Your proposal request has already been recorded.',
-      );
-      return;
-    }
-    sendError(res, err.message, err.statusCode || 500);
+    sendError(res, err.message, 500);
   }
 };
 
@@ -140,34 +132,33 @@ export const getQuotations = async (req: Request, res: Response): Promise<void> 
   try {
     const { status, search, page = '1', limit = '15' } = req.query;
 
-    const query: any = {};
+    let list = [...inMemoryQuotations];
     if (status && status !== 'all') {
-      query.status = status;
+      list = list.filter((q) => q.status === status);
     }
 
     if (search) {
-      query.$or = [
-        { name: { $regex: escapeRegex(String(search)), $options: 'i' } },
-        { email: { $regex: escapeRegex(String(search)), $options: 'i' } },
-        { company: { $regex: escapeRegex(String(search)), $options: 'i' } },
-        { projectType: { $regex: escapeRegex(String(search)), $options: 'i' } },
-      ];
+      const q = String(search).toLowerCase();
+      list = list.filter(
+        (item) =>
+          item.name.toLowerCase().includes(q) ||
+          item.email.toLowerCase().includes(q) ||
+          item.company?.toLowerCase().includes(q) ||
+          item.projectType.toLowerCase().includes(q),
+      );
     }
 
+    const total = list.length;
     const pageNum = Math.max(1, parseInt(String(page), 10));
     const limitNum = Math.max(1, parseInt(String(limit), 10));
-    const skip = (pageNum - 1) * limitNum;
+    const startIndex = (pageNum - 1) * limitNum;
+    const paginated = list.slice(startIndex, startIndex + limitNum);
 
-    const [quotations, total] = await Promise.all([
-      QuotationRequest.find(query).sort({ createdAt: -1 }).skip(skip).limit(limitNum),
-      QuotationRequest.countDocuments(query),
-    ]);
-
-    sendSuccess(res, quotations, 'Quotations retrieved successfully.', 200, {
+    sendSuccess(res, paginated, 'Quotations retrieved successfully.', 200, {
       page: pageNum,
       limit: limitNum,
       total,
-      totalPages: Math.ceil(total / limitNum),
+      totalPages: Math.ceil(total / limitNum) || 1,
     });
   } catch (err: any) {
     sendError(res, err.message, 500);
@@ -177,7 +168,7 @@ export const getQuotations = async (req: Request, res: Response): Promise<void> 
 export const getQuotationById = async (req: Request, res: Response): Promise<void> => {
   try {
     const { id } = req.params;
-    const quotation = await QuotationRequest.findById(id);
+    const quotation = inMemoryQuotations.find((q) => q._id === id);
     if (!quotation) {
       sendError(res, 'Quotation not found.', 404);
       return;
@@ -191,22 +182,16 @@ export const getQuotationById = async (req: Request, res: Response): Promise<voi
 export const updateQuotation = async (req: Request, res: Response): Promise<void> => {
   try {
     const { id } = req.params;
-    const { status, estimatedQuote, notes, proposal } = req.body;
-
-    const updateData: any = {};
-    if (status) updateData.status = status;
-    if (estimatedQuote !== undefined) updateData.estimatedQuote = Number(estimatedQuote);
-    if (notes !== undefined) updateData.notes = notes;
-    if (proposal !== undefined) updateData.proposal = proposal;
-
-    const quotation = await QuotationRequest.findByIdAndUpdate(id, updateData, {
-      new: true,
-      runValidators: true,
-    });
+    const quotation = inMemoryQuotations.find((q) => q._id === id);
     if (!quotation) {
       sendError(res, 'Quotation not found.', 404);
       return;
     }
+
+    const { status, estimatedQuote, notes } = req.body;
+    if (status) quotation.status = status;
+    if (estimatedQuote !== undefined) quotation.estimatedQuote = Number(estimatedQuote);
+    if (notes !== undefined) quotation.notes = notes;
 
     sendSuccess(res, quotation, 'Quotation updated successfully.');
   } catch (err: any) {
@@ -217,11 +202,12 @@ export const updateQuotation = async (req: Request, res: Response): Promise<void
 export const deleteQuotation = async (req: Request, res: Response): Promise<void> => {
   try {
     const { id } = req.params;
-    const quotation = await QuotationRequest.findByIdAndDelete(id);
-    if (!quotation) {
+    const index = inMemoryQuotations.findIndex((q) => q._id === id);
+    if (index === -1) {
       sendError(res, 'Quotation not found.', 404);
       return;
     }
+    inMemoryQuotations.splice(index, 1);
     sendSuccess(res, { id }, 'Quotation deleted successfully.');
   } catch (err: any) {
     sendError(res, err.message, 500);

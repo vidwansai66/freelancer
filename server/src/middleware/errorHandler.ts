@@ -8,14 +8,14 @@ export const errorHandler = (err: any, _req: Request, res: Response, next: NextF
     return;
   }
 
-  // Mongoose duplicate key error (code 11000)
+  // Duplicate key error (code 11000)
   if (err.code === 11000) {
     const field = Object.keys(err.keyPattern || {})[0] || 'field';
     sendError(res, `Duplicate submission or entry detected for ${field}.`, 409, 'Conflict');
     return;
   }
 
-  // Mongoose validation error
+  // Schema validation error
   if (err.name === 'ValidationError') {
     const messages = Object.values(err.errors).map((e: any) => e.message);
     sendError(res, messages.join(', '), 400, 'Validation Error');

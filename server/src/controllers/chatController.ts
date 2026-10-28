@@ -1,9 +1,26 @@
-import { escapeRegex } from '../utils/security';
 import { Request, Response } from 'express';
-import { ChatConversation } from '../models/ChatConversation';
 import { sendSuccess, sendError } from '../utils/apiResponse';
-import { AuthenticatedRequest } from '../middleware/authMiddleware';
 import { answerStudioQuestion } from '../services/chatAssistant';
+import { studioSettingsData } from '../data/content';
+
+interface ChatMessage {
+  sender: 'client' | 'admin';
+  senderName: string;
+  message: string;
+  sentAt: Date;
+  isRead: boolean;
+}
+
+interface ChatSession {
+  sessionId: string;
+  clientName: string;
+  clientEmail: string;
+  status: 'active' | 'closed';
+  messages: ChatMessage[];
+  lastMessageAt: Date;
+}
+
+const inMemoryChatSessions: Map<string, ChatSession> = new Map();
 
 export const initOrGetSession = async (req: Request, res: Response): Promise<void> => {
   try {
@@ -14,35 +31,32 @@ export const initOrGetSession = async (req: Request, res: Response): Promise<voi
       return;
     }
 
-    const insert: any = {
-      sessionId,
-      status: 'active',
-      messages: [
-        {
-          sender: 'admin',
-          senderName: 'Teja Web Studio',
-          message:
-            'Hello! Thanks for visiting Teja Web Studio. How can we help you with your website project today?',
-          sentAt: new Date(),
-          isRead: true,
-        },
-      ],
-      lastMessageAt: new Date(),
-    };
-    const update: any = {};
-    if (clientName) update.clientName = clientName.trim();
-    else insert.clientName = 'Website Guest';
-    if (clientEmail) update.clientEmail = clientEmail.toLowerCase().trim();
-    else insert.clientEmail = '';
-    // React Strict Mode and quick navigation can initialize the same session concurrently.
-    // A single indexed upsert prevents duplicate conversations.
-    const conversation = await ChatConversation.findOneAndUpdate(
-      { sessionId },
-      { $setOnInsert: insert, ...(Object.keys(update).length ? { $set: update } : {}) },
-      { upsert: true, new: true, runValidators: true },
-    );
+    let session = inMemoryChatSessions.get(sessionId);
+    if (!session) {
+      session = {
+        sessionId,
+        clientName: clientName?.trim() || 'Website Guest',
+        clientEmail: clientEmail?.toLowerCase().trim() || '',
+        status: 'active',
+        messages: [
+          {
+            sender: 'admin',
+            senderName: 'Teja Web Studio',
+            message:
+              'Hello! Thanks for visiting Teja Web Studio. How can we help you with your website project today?',
+            sentAt: new Date(),
+            isRead: true,
+          },
+        ],
+        lastMessageAt: new Date(),
+      };
+      inMemoryChatSessions.set(sessionId, session);
+    } else {
+      if (clientName) session.clientName = clientName.trim();
+      if (clientEmail) session.clientEmail = clientEmail.toLowerCase().trim();
+    }
 
-    sendSuccess(res, conversation, 'Chat session active.');
+    sendSuccess(res, session, 'Chat session active.');
   } catch (err: any) {
     sendError(res, err.message, 500);
   }
@@ -51,14 +65,14 @@ export const initOrGetSession = async (req: Request, res: Response): Promise<voi
 export const getSessionMessages = async (req: Request, res: Response): Promise<void> => {
   try {
     const { sessionId } = req.params;
-    const conversation = await ChatConversation.findOne({ sessionId });
+    const session = inMemoryChatSessions.get(sessionId);
 
-    if (!conversation) {
+    if (!session) {
       sendError(res, 'Conversation not found.', 404);
       return;
     }
 
-    sendSuccess(res, conversation.messages, 'Messages retrieved.');
+    sendSuccess(res, session.messages, 'Messages retrieved.');
   } catch (err: any) {
     sendError(res, err.message, 500);
   }
@@ -67,41 +81,71 @@ export const getSessionMessages = async (req: Request, res: Response): Promise<v
 export const sendClientMessage = async (req: Request, res: Response): Promise<void> => {
   try {
     const { sessionId } = req.params;
-    const { message, clientName, clientEmail } = req.body;
+    const { message, clientName } = req.body;
 
     if (!message || !message.trim()) {
       sendError(res, 'Message text is required.', 400);
       return;
     }
 
-    const conversation = await ChatConversation.findOne({ sessionId });
-    if (!conversation) {
-      sendError(res, 'Start a chat with your name and email first.', 400);
-      return;
+    let session = inMemoryChatSessions.get(sessionId);
+    if (!session) {
+      session = {
+        sessionId,
+        clientName: clientName?.trim() || 'Website Guest',
+        clientEmail: '',
+        status: 'active',
+        messages: [],
+        lastMessageAt: new Date(),
+      };
+      inMemoryChatSessions.set(sessionId, session);
     }
 
-    conversation.messages.push({
+    const cleanMessage = message.trim();
+    const userMsg: ChatMessage = {
       sender: 'client',
-      senderName: conversation.clientName,
-      message: message.trim(),
+      senderName: clientName?.trim() || session.clientName || 'Visitor',
+      message: cleanMessage,
       sentAt: new Date(),
-      isRead: false,
-    });
-    conversation.lastMessageAt = new Date();
-    await conversation.save();
+      isRead: true,
+    };
+    session.messages.push(userMsg);
+    session.lastMessageAt = new Date();
 
-    const clientMessage = conversation.messages[conversation.messages.length - 1];
-    const recentClientMessages = conversation.messages
-      .filter((item) => item.sender === 'client')
-      .slice(-4, -1)
-      .map((item) => item.message);
-    const answer = await answerStudioQuestion(message.trim(), recentClientMessages);
-    const updated = await ChatConversation.findOneAndUpdate(
-      { sessionId },
-      { $push: { messages: { sender: 'assistant', senderName: 'Studio Assistant', message: answer, sentAt: new Date(), isRead: true } }, $set: { lastMessageAt: new Date() } },
-      { new: true, runValidators: true },
+    // Generate intelligent studio assistant reply
+    let reply =
+      'Thank you for your message! For an immediate quote or live consultation, feel free to WhatsApp us directly at +91 94909 55048.';
+
+    try {
+      const priorMessages = session.messages.slice(-5).map((m) => m.message);
+      const aiResponse = await answerStudioQuestion(cleanMessage, priorMessages);
+      if (aiResponse) {
+        reply = aiResponse;
+      }
+    } catch {
+      // Fallback
+    }
+
+    const assistantMsg: ChatMessage = {
+      sender: 'admin',
+      senderName: 'Teja Web Studio',
+      message: reply,
+      sentAt: new Date(),
+      isRead: true,
+    };
+    session.messages.push(assistantMsg);
+
+    sendSuccess(
+      res,
+      {
+        session,
+        reply: assistantMsg,
+        whatsappConnectUrl: `https://wa.me/${studioSettingsData.whatsappNumber}?text=${encodeURIComponent(
+          `Hi Teja Web Studio! I am messaging from the website: "${cleanMessage}"`,
+        )}`,
+      },
+      'Message sent.',
     );
-    sendSuccess(res, { clientMessage, assistantMessage: updated?.messages[updated.messages.length - 1] }, 'Message sent.', 201);
   } catch (err: any) {
     sendError(res, err.message, 500);
   }
@@ -109,52 +153,35 @@ export const sendClientMessage = async (req: Request, res: Response): Promise<vo
 
 export const getAdminConversations = async (_req: Request, res: Response): Promise<void> => {
   try {
-    const conversations = await ChatConversation.find({ 'messages.sender': 'client' }).sort({
-      lastMessageAt: -1,
-    });
-    sendSuccess(res, conversations, 'Conversations retrieved for admin.');
+    const conversations = Array.from(inMemoryChatSessions.values());
+    sendSuccess(res, conversations, 'Conversations retrieved.');
   } catch (err: any) {
     sendError(res, err.message, 500);
   }
 };
 
-export const sendAdminReply = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+export const sendAdminReply = async (req: Request, res: Response): Promise<void> => {
   try {
     const { sessionId } = req.params;
     const { message } = req.body;
 
-    if (!message || !message.trim()) {
-      sendError(res, 'Reply message cannot be empty.', 400);
-      return;
-    }
-
-    const conversation = await ChatConversation.findOne({ sessionId });
-    if (!conversation) {
+    const session = inMemoryChatSessions.get(sessionId);
+    if (!session) {
       sendError(res, 'Conversation not found.', 404);
       return;
     }
 
-    const senderName = req.user?.fullName || 'Studio Admin';
-
-    conversation.messages.push({
+    const adminMsg: ChatMessage = {
       sender: 'admin',
-      senderName,
+      senderName: 'Studio Admin',
       message: message.trim(),
       sentAt: new Date(),
       isRead: true,
-    });
+    };
+    session.messages.push(adminMsg);
+    session.lastMessageAt = new Date();
 
-    // Mark previous client messages as read
-    conversation.messages.forEach((msg) => {
-      if (msg.sender === 'client') {
-        msg.isRead = true;
-      }
-    });
-
-    conversation.lastMessageAt = new Date();
-    await conversation.save();
-
-    sendSuccess(res, conversation.messages[conversation.messages.length - 1], 'Reply sent.', 201);
+    sendSuccess(res, session, 'Admin reply sent.');
   } catch (err: any) {
     sendError(res, err.message, 500);
   }
@@ -163,18 +190,13 @@ export const sendAdminReply = async (req: AuthenticatedRequest, res: Response): 
 export const closeConversation = async (req: Request, res: Response): Promise<void> => {
   try {
     const { sessionId } = req.params;
-    const conversation = await ChatConversation.findOneAndUpdate(
-      { sessionId },
-      { status: 'closed' },
-      { new: true, runValidators: true },
-    );
-
-    if (!conversation) {
+    const session = inMemoryChatSessions.get(sessionId);
+    if (!session) {
       sendError(res, 'Conversation not found.', 404);
       return;
     }
-
-    sendSuccess(res, conversation, 'Conversation closed.');
+    session.status = 'closed';
+    sendSuccess(res, session, 'Conversation closed.');
   } catch (err: any) {
     sendError(res, err.message, 500);
   }

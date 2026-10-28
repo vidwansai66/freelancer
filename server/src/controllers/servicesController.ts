@@ -1,15 +1,11 @@
-import { escapeRegex } from '../utils/security';
 import { Request, Response } from 'express';
-import { Service } from '../models/Service';
+import { contentStore } from '../services/contentStore';
 import { sendSuccess, sendError } from '../utils/apiResponse';
 import { slugify } from '../utils/slugify';
 
 export const getServices = async (_req: Request, res: Response): Promise<void> => {
   try {
-    const services = await Service.find({ isPublished: { $ne: false } }).sort({
-      orderIndex: 1,
-      createdAt: 1,
-    });
+    const services = contentStore.getServices();
     sendSuccess(res, services, 'Services retrieved successfully.');
   } catch (err: any) {
     sendError(res, err.message, 500);
@@ -19,7 +15,7 @@ export const getServices = async (_req: Request, res: Response): Promise<void> =
 export const getServiceBySlug = async (req: Request, res: Response): Promise<void> => {
   try {
     const { slug } = req.params;
-    const service = await Service.findOne({ slug, isPublished: { $ne: false } });
+    const service = contentStore.getServiceBySlug(slug);
     if (!service) {
       sendError(res, 'Service not found.', 404);
       return;
@@ -50,14 +46,13 @@ export const createService = async (req: Request, res: Response): Promise<void> 
     }
 
     const finalSlug = slug ? slugify(slug) : slugify(title);
-
-    const existing = await Service.findOne({ slug: finalSlug });
+    const existing = contentStore.getServiceBySlug(finalSlug);
     if (existing) {
       sendError(res, `A service with slug "${finalSlug}" already exists.`, 409);
       return;
     }
 
-    const service = await Service.create({
+    const service = contentStore.addService({
       isPublished: req.body.isPublished ?? true,
       title,
       slug: finalSlug,
@@ -87,10 +82,7 @@ export const updateService = async (req: Request, res: Response): Promise<void> 
       updateData.slug = slugify(updateData.slug);
     }
 
-    const service = await Service.findByIdAndUpdate(id, updateData, {
-      new: true,
-      runValidators: true,
-    });
+    const service = contentStore.updateService(id, updateData);
     if (!service) {
       sendError(res, 'Service not found.', 404);
       return;
@@ -105,8 +97,8 @@ export const updateService = async (req: Request, res: Response): Promise<void> 
 export const deleteService = async (req: Request, res: Response): Promise<void> => {
   try {
     const { id } = req.params;
-    const service = await Service.findByIdAndDelete(id);
-    if (!service) {
+    const deleted = contentStore.deleteService(id);
+    if (!deleted) {
       sendError(res, 'Service not found.', 404);
       return;
     }

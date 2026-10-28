@@ -1,28 +1,11 @@
-import mongoose from 'mongoose';
-import { env } from './env';
+/**
+ * Database Module (Zero-Cost Architecture Migration)
+ * MongoDB & Mongoose dependencies have been completely removed.
+ */
 
-export const isDbConnected = (): boolean => mongoose.connection.readyState === 1;
+export const isDbConnected = (): boolean => true;
 
 export const connectDB = async (): Promise<void> => {
-  try {
-    const conn = await mongoose.connect(env.MONGODB_URI, {
-      serverSelectionTimeoutMS: 5000,
-    });
-
-    console.log(`[Database] MongoDB Connected: ${conn.connection.host} (${conn.connection.name})`);
-  } catch (error: any) {
-    // Do not continue into seeding or serve requests with a disconnected database.
-    // Driver errors may contain connection details; keep credentials out of logs.
-    throw new Error(
-      'MongoDB connection failed. Check server/.env, Atlas cluster readiness and the IP access list.',
-    );
-  }
+  // No-op: Zero-Cost Architecture does not require a database connection.
+  return Promise.resolve();
 };
-
-mongoose.connection.on('disconnected', () => {
-  console.warn('[Database] MongoDB connection disconnected');
-});
-
-mongoose.connection.on('reconnected', () => {
-  console.log('[Database] MongoDB reconnected');
-});

@@ -1,6 +1,5 @@
-import { escapeRegex } from '../utils/security';
 import { Request, Response } from 'express';
-import { Project } from '../models/Project';
+import { contentStore } from '../services/contentStore';
 import { sendSuccess, sendError } from '../utils/apiResponse';
 import { slugify } from '../utils/slugify';
 
@@ -8,33 +7,18 @@ export const getProjects = async (req: Request, res: Response): Promise<void> =>
   try {
     const { category, search, page = '1', limit = '12' } = req.query;
 
-    const query: any = {};
-    if (category && category !== 'All') {
-      query.category = category;
-    }
+    const result = contentStore.getProjects({
+      category: category && category !== 'All' ? String(category) : undefined,
+      search: search ? String(search) : undefined,
+      page: Math.max(1, parseInt(String(page), 10)),
+      limit: Math.max(1, parseInt(String(limit), 10)),
+    });
 
-    if (search) {
-      query.$or = [
-        { title: { $regex: escapeRegex(String(search)), $options: 'i' } },
-        { clientName: { $regex: escapeRegex(String(search)), $options: 'i' } },
-        { technologies: { $in: [new RegExp(escapeRegex(String(search)), 'i')] } },
-      ];
-    }
-
-    const pageNum = Math.max(1, parseInt(String(page), 10));
-    const limitNum = Math.max(1, parseInt(String(limit), 10));
-    const skip = (pageNum - 1) * limitNum;
-
-    const [projects, total] = await Promise.all([
-      Project.find(query).sort({ orderIndex: 1, createdAt: -1 }).skip(skip).limit(limitNum),
-      Project.countDocuments(query),
-    ]);
-
-    sendSuccess(res, projects, 'Projects retrieved successfully.', 200, {
-      page: pageNum,
-      limit: limitNum,
-      total,
-      totalPages: Math.ceil(total / limitNum),
+    sendSuccess(res, result.data, 'Projects retrieved successfully.', 200, {
+      page: result.page,
+      limit: parseInt(String(limit), 10),
+      total: result.total,
+      totalPages: result.totalPages,
     });
   } catch (err: any) {
     sendError(res, err.message, 500);
@@ -44,7 +28,7 @@ export const getProjects = async (req: Request, res: Response): Promise<void> =>
 export const getProjectBySlug = async (req: Request, res: Response): Promise<void> => {
   try {
     const { slug } = req.params;
-    const project = await Project.findOne({ slug });
+    const project = contentStore.getProjectBySlug(slug);
     if (!project) {
       sendError(res, 'Project not found.', 404);
       return;
@@ -79,14 +63,13 @@ export const createProject = async (req: Request, res: Response): Promise<void> 
     }
 
     const finalSlug = slug ? slugify(slug) : slugify(title);
-
-    const existing = await Project.findOne({ slug: finalSlug });
+    const existing = contentStore.getProjectBySlug(finalSlug);
     if (existing) {
       sendError(res, `A project with slug "${finalSlug}" already exists.`, 409);
       return;
     }
 
-    const project = await Project.create({
+    const project = contentStore.addProject({
       title,
       slug: finalSlug,
       category,
@@ -119,10 +102,7 @@ export const updateProject = async (req: Request, res: Response): Promise<void> 
       updateData.slug = slugify(updateData.slug);
     }
 
-    const project = await Project.findByIdAndUpdate(id, updateData, {
-      new: true,
-      runValidators: true,
-    });
+    const project = contentStore.updateProject(id, updateData);
     if (!project) {
       sendError(res, 'Project not found.', 404);
       return;
@@ -137,8 +117,8 @@ export const updateProject = async (req: Request, res: Response): Promise<void> 
 export const deleteProject = async (req: Request, res: Response): Promise<void> => {
   try {
     const { id } = req.params;
-    const project = await Project.findByIdAndDelete(id);
-    if (!project) {
+    const deleted = contentStore.deleteProject(id);
+    if (!deleted) {
       sendError(res, 'Project not found.', 404);
       return;
     }

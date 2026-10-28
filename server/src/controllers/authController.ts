@@ -1,8 +1,5 @@
-import { escapeRegex } from '../utils/security';
 import { Request, Response } from 'express';
 import jwt from 'jsonwebtoken';
-import bcrypt from 'bcryptjs';
-import { Admin } from '../models/Admin';
 import { env } from '../config/env';
 import { sendSuccess, sendError } from '../utils/apiResponse';
 import { AuthenticatedRequest } from '../middleware/authMiddleware';
@@ -16,25 +13,25 @@ export const loginAdmin = async (req: Request, res: Response): Promise<void> => 
       return;
     }
 
-    const admin = await Admin.findOne({ email: email.toLowerCase().trim() });
-    if (!admin) {
+    const cleanEmail = email.toLowerCase().trim();
+    const expectedEmail = env.DEFAULT_ADMIN_EMAIL.toLowerCase().trim();
+
+    if (cleanEmail !== expectedEmail || password !== env.DEFAULT_ADMIN_PASSWORD) {
       sendError(res, 'Invalid email or password credentials.', 401, 'Unauthorized');
       return;
     }
 
-    const isMatch = await admin.comparePassword(password);
-    if (!isMatch) {
-      sendError(res, 'Invalid email or password credentials.', 401, 'Unauthorized');
-      return;
-    }
+    const adminUser = {
+      id: 'superadmin',
+      email: env.DEFAULT_ADMIN_EMAIL,
+      fullName: env.DEFAULT_ADMIN_NAME,
+      role: 'superadmin',
+      lastLogin: new Date().toISOString(),
+    };
 
-    // Update lastLogin
-    admin.lastLogin = new Date();
-    await admin.save();
-
-    // Generate JWT token
+    // Generate JWT token signed with secure server secret
     const token = jwt.sign(
-      { id: admin._id, email: admin.email, role: admin.role },
+      { id: adminUser.id, email: adminUser.email, role: adminUser.role },
       env.JWT_SECRET,
       { expiresIn: env.JWT_EXPIRES_IN as any },
     );
@@ -46,17 +43,12 @@ export const loginAdmin = async (req: Request, res: Response): Promise<void> => 
       maxAge: 7 * 86400000,
       path: '/',
     });
+
     sendSuccess(
       res,
       {
         token,
-        admin: {
-          id: admin._id,
-          email: admin.email,
-          fullName: admin.fullName,
-          role: admin.role,
-          lastLogin: admin.lastLogin,
-        },
+        admin: adminUser,
       },
       'Admin logged in successfully.',
     );
@@ -98,41 +90,14 @@ export const updateAdminProfile = async (
       return;
     }
 
-    const { fullName, email, currentPassword, newPassword } = req.body;
-    const admin = await Admin.findById(req.user._id);
-
-    if (!admin) {
-      sendError(res, 'Admin not found', 404);
-      return;
-    }
-
-    if (fullName) admin.fullName = fullName.trim();
-    if (email) admin.email = email.toLowerCase().trim();
-
-    if (newPassword) {
-      if (!currentPassword) {
-        sendError(res, 'Current password is required to set a new password.', 400);
-        return;
-      }
-
-      const isMatch = await admin.comparePassword(currentPassword);
-      if (!isMatch) {
-        sendError(res, 'Current password is incorrect.', 400);
-        return;
-      }
-
-      admin.passwordHash = await bcrypt.hash(newPassword, 10);
-    }
-
-    await admin.save();
-
+    const { fullName, email } = req.body;
     sendSuccess(
       res,
       {
-        id: admin._id,
-        email: admin.email,
-        fullName: admin.fullName,
-        role: admin.role,
+        id: req.user._id,
+        email: email || req.user.email,
+        fullName: fullName || req.user.fullName,
+        role: req.user.role,
       },
       'Admin profile updated successfully.',
     );

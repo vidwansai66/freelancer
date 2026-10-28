@@ -1,20 +1,23 @@
-import { listRecords } from '../utils/listRecords';
-import { escapeRegex } from '../utils/security';
 import { Request, Response } from 'express';
-import { FAQ } from '../models/FAQ';
+import { contentStore } from '../services/contentStore';
 import { sendSuccess, sendError } from '../utils/apiResponse';
 
 export const getActiveFAQs = async (_req: Request, res: Response): Promise<void> => {
   try {
-    const faqs = await FAQ.find({ isActive: true }).sort({ category: 1, orderIndex: 1 });
+    const faqs = contentStore.getFaqs();
     sendSuccess(res, faqs, 'FAQs retrieved successfully.');
   } catch (err: any) {
     sendError(res, err.message, 500);
   }
 };
 
-export const getAllFAQsAdmin = async (req: Request, res: Response): Promise<void> => {
-  await listRecords(req, res, FAQ, ['question', 'answer'], {}, { orderIndex: 1 });
+export const getAllFAQsAdmin = async (_req: Request, res: Response): Promise<void> => {
+  try {
+    const faqs = contentStore.getFaqs(true);
+    sendSuccess(res, faqs, 'All FAQs retrieved successfully.');
+  } catch (err: any) {
+    sendError(res, err.message, 500);
+  }
 };
 
 export const createFAQ = async (req: Request, res: Response): Promise<void> => {
@@ -26,7 +29,7 @@ export const createFAQ = async (req: Request, res: Response): Promise<void> => {
       return;
     }
 
-    const faq = await FAQ.create({
+    const faq = contentStore.addFaq({
       question: question.trim(),
       answer: answer.trim(),
       category: category ? category.trim() : 'General',
@@ -43,7 +46,7 @@ export const createFAQ = async (req: Request, res: Response): Promise<void> => {
 export const updateFAQ = async (req: Request, res: Response): Promise<void> => {
   try {
     const { id } = req.params;
-    const faq = await FAQ.findByIdAndUpdate(id, req.body, { new: true, runValidators: true });
+    const faq = contentStore.updateFaq(id, req.body);
     if (!faq) {
       sendError(res, 'FAQ not found.', 404);
       return;
@@ -57,8 +60,8 @@ export const updateFAQ = async (req: Request, res: Response): Promise<void> => {
 export const deleteFAQ = async (req: Request, res: Response): Promise<void> => {
   try {
     const { id } = req.params;
-    const faq = await FAQ.findByIdAndDelete(id);
-    if (!faq) {
+    const deleted = contentStore.deleteFaq(id);
+    if (!deleted) {
       sendError(res, 'FAQ not found.', 404);
       return;
     }

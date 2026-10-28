@@ -15,6 +15,6 @@ export const checkHoneypotAndDuplicate = (
     return;
   }
 
-  // Durable idempotency is enforced by unique request keys in MongoDB.
+  // Form deduplication is handled by rate limiting and Zoho CRM email lookup.
   next();
 };

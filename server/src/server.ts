@@ -1,14 +1,9 @@
 import { seoRoutes } from './routes/seoRoutes';
-import mongoose from 'mongoose';
-import { BookingLock } from './models/BookingLock';
-import { initializeReservations } from './services/bookingReservations';
 import express, { Request, Response } from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
 import morgan from 'morgan';
 import { env } from './config/env';
-import { connectDB } from './config/db';
-import { seedDatabase } from './services/seedService';
 import apiRoutes from './routes/apiRoutes';
 import { errorHandler } from './middleware/errorHandler';
 import { generalApiLimiter } from './middleware/rateLimiter';
@@ -47,10 +42,15 @@ app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
 // Health check endpoint
 app.get('/health', (_req: Request, res: Response) => {
-  res.status(mongoose.connection.readyState === 1 ? 200 : 503).json({
-    status: mongoose.connection.readyState === 1 ? 'ok' : 'unavailable',
+  const crmStatus = env.ZOHO_CLIENT_ID
+    ? (env.ZOHO_REFRESH_TOKEN ? 'Zoho CRM India (Authorized)' : 'Zoho CRM India (Pending /api/zoho/auth)')
+    : 'Zoho CRM India (Credentials Pending)';
+  res.status(200).json({
+    status: 'ok',
     timestamp: new Date().toISOString(),
     service: 'Freelance Studio API',
+    database: 'Zero-Cost Static & Edge Architecture',
+    crm: crmStatus,
   });
 });
 
@@ -70,12 +70,6 @@ app.use(errorHandler);
 // Bootstrap Server
 const startServer = async () => {
   try {
-    await connectDB();
-    // Auto-seed initial content and superadmin if database is clean
-    await seedDatabase();
-    await Promise.all(Object.values(mongoose.models).map((model) => model.init()));
-    await initializeReservations();
-
     app.listen(env.PORT, () => {
       console.log(`\n🚀 [Server] Freelance Web Studio API running at http://localhost:${env.PORT}`);
       console.log(`📡 [Health] http://localhost:${env.PORT}/health`);

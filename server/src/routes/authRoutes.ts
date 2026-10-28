@@ -2,27 +2,27 @@ import { asyncRouter } from '../utils/asyncRouter';
 import { loginAdmin, getCurrentAdmin, updateAdminProfile } from '../controllers/authController';
 import { authenticateAdmin, requireSuperadmin } from '../middleware/authMiddleware';
 import { loginRateLimiter } from '../middleware/rateLimiter';
+import { env } from '../config/env';
 
-import { Admin } from '../models/Admin';
-import bcrypt from 'bcryptjs';
 const router = asyncRouter();
+
 router.post('/logout', (_req, res) => {
   res.clearCookie('studio_session', { path: '/' });
-  res.json({ success: true });
+  res.json({ success: true, message: 'Logged out successfully.' });
 });
+
 router.get('/users', authenticateAdmin, requireSuperadmin, async (_req, res) => {
-  res.json({ success: true, data: await Admin.find().select('-passwordHash') });
-});
-router.post('/users', authenticateAdmin, requireSuperadmin, async (req, res) => {
-  const user = await Admin.create({
-    email: req.body.email,
-    fullName: req.body.fullName,
-    role: req.body.role,
-    passwordHash: await bcrypt.hash(req.body.password, 12),
+  res.json({
+    success: true,
+    data: [
+      {
+        id: 'superadmin',
+        email: env.DEFAULT_ADMIN_EMAIL,
+        fullName: env.DEFAULT_ADMIN_NAME,
+        role: 'superadmin',
+      },
+    ],
   });
-  res
-    .status(201)
-    .json({ success: true, data: { id: user._id, email: user.email, role: user.role } });
 });
 
 router.post('/login', loginRateLimiter, loginAdmin);

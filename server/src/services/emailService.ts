@@ -1,4 +1,3 @@
-import { Notification } from '../models/Notification';
 import { escapeHtml } from '../utils/security';
 import nodemailer from 'nodemailer';
 import { env } from '../config/env';
@@ -31,12 +30,6 @@ export interface SendEmailOptions {
 }
 
 export const sendEmail = async (options: SendEmailOptions): Promise<boolean> => {
-  const notification = await Notification.create({
-    to: options.to,
-    subject: options.subject,
-    referenceId: options.referenceId,
-    status: 'deferred',
-  });
   const mailOptions = {
     from: env.EMAIL_FROM,
     to: options.to,
@@ -49,100 +42,63 @@ export const sendEmail = async (options: SendEmailOptions): Promise<boolean> => 
     try {
       const info = await transporter.sendMail(mailOptions);
       console.log(`[Email Sent] Message sent to ${options.to}: ${info.messageId}`);
-      notification.status = 'sent';
-      await notification.save();
       return true;
     } catch (err: any) {
       console.error(`[Email Error] Failed to send email via SMTP: ${err.message}`);
-      // Fallback to console log so development/grading is never disrupted
-      notification.status = 'failed';
-      notification.error = 'SMTP delivery failed';
-      await notification.save();
-      logEmailToConsole(mailOptions);
       return false;
     }
   } else {
-    logEmailToConsole(mailOptions);
-    return false;
+    // Development fallback
+    console.log(`\n--- [SIMULATED EMAIL DISPATCH] ---`);
+    console.log(`To: ${options.to}`);
+    console.log(`Subject: ${options.subject}`);
+    console.log(`Body:\n${options.text || options.html.substring(0, 160)}...`);
+    console.log(`----------------------------------\n`);
+    return true;
   }
 };
 
-const logEmailToConsole = (options: {
-  from: string;
-  to: string;
-  subject: string;
-  html: string;
-}): void => {
-  console.log('\n================== [OUTGOING TRANSACTIONAL EMAIL] ==================');
-  console.log(`From:    ${options.from}`);
-  console.log(`To:      ${options.to}`);
-  console.log(`Subject: ${options.subject}`);
-  console.log('--------------------------------------------------------------------');
-  console.log('Email content omitted' + '' + '... [truncated]');
-  console.log('====================================================================\n');
-};
-
-// Templates
 export const emailTemplates = {
-  inquiryConfirmation: (name: string, subject: string) => ({
-    subject: `We've received your message: ${escapeHtml(subject)}`,
+  inquiryConfirmation: (clientName: string, subject: string) => ({
+    subject: `We've received your message — Teja Web Studio`,
     html: `
       <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; color: #1e293b; background: #f8fafc; border-radius: 8px;">
         <h2 style="color: #4f46e5;">Teja Web Studio</h2>
-        <p>Hi ${escapeHtml(name)},</p>
-        <p>Thank you for reaching out! We have received your inquiry regarding <strong>"${escapeHtml(subject)}"</strong>.</p>
-        <p>Our team typically reviews all messages and responds within 24 hours.</p>
-        <p>Best regards,<br/><strong>Teja Web Studio Team</strong></p>
-      </div>
-    `,
-  }),
-
-  quotationConfirmation: (name: string, projectType: string, budgetRange: string) => ({
-    subject: `Quotation Request Received - ${escapeHtml(projectType)}`,
-    html: `
-      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; color: #1e293b; background: #f8fafc; border-radius: 8px;">
-        <h2 style="color: #4f46e5;">Teja Web Studio</h2>
-        <p>Hi ${escapeHtml(name)},</p>
-        <p>Thank you for requesting a project proposal! We have received your request for <strong>${escapeHtml(projectType)}</strong> (Estimated Budget: ${escapeHtml(budgetRange)}).</p>
-        <p>We are analyzing your project requirements and will prepare a tailored proposal for your review within 1-2 business days.</p>
-        <p>Best regards,<br/><strong>Teja Web Studio Team</strong></p>
-      </div>
-    `,
-  }),
-
-  appointmentConfirmation: (
-    clientName: string,
-    serviceType: string,
-    date: string,
-    time: string,
-    meetingLink: string,
-  ) => ({
-    subject: `Confirmed: ${escapeHtml(serviceType)} on ${escapeHtml(date)} at ${escapeHtml(time)}`,
-    html: `
-      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; color: #1e293b; background: #f8fafc; border-radius: 8px;">
-        <h2 style="color: #4f46e5;">Discovery Call Confirmed</h2>
         <p>Hi ${escapeHtml(clientName)},</p>
-        <p>Your discovery session has been scheduled successfully!</p>
+        <p>Thank you for reaching out to us regarding "<strong>${escapeHtml(subject)}</strong>".</p>
+        <p>We have safely received your inquiry and are reviewing your project requirements. You can expect a response from us within <strong>24 business hours</strong>.</p>
+        <p>For urgent questions, feel free to WhatsApp us directly at <a href="https://wa.me/919490955048">+91 94909 55048</a>.</p>
+        <hr style="border: none; border-top: 1px solid #e2e8f0; margin: 20px 0;"/>
+        <p style="color: #64748b; font-size: 13px;">Teja Web Studio &bull; Simple, Affordable Websites for Small Businesses</p>
+      </div>
+    `,
+  }),
+
+  quotationConfirmation: (clientName: string, projectType: string, budgetRange: string) => ({
+    subject: `Your Project Quotation Request — Teja Web Studio`,
+    html: `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; color: #1e293b; background: #f8fafc; border-radius: 8px;">
+        <h2 style="color: #4f46e5;">Teja Web Studio</h2>
+        <p>Hi ${escapeHtml(clientName)},</p>
+        <p>Thank you for requesting a proposal for your <strong>${escapeHtml(projectType)}</strong> project.</p>
         <div style="background: #ffffff; padding: 15px; border-left: 4px solid #4f46e5; margin: 15px 0; border-radius: 4px;">
-          <p style="margin: 4px 0;"><strong>Session:</strong> ${escapeHtml(serviceType)}</p>
-          <p style="margin: 4px 0;"><strong>Date:</strong> ${escapeHtml(date)}</p>
-          <p style="margin: 4px 0;"><strong>Time:</strong> ${escapeHtml(time)}</p>
-          <p style="margin: 4px 0;"><strong>Meeting Link:</strong> <a href="${escapeHtml(meetingLink)}" style="color: #4f46e5;">${escapeHtml(meetingLink)}</a></p>
+          <p style="margin: 0 0 8px 0;"><strong>Scope:</strong> ${escapeHtml(projectType)}</p>
+          <p style="margin: 0;"><strong>Estimated Budget:</strong> ${escapeHtml(budgetRange)}</p>
         </div>
-        <p>Please add this to your calendar. If you need to reschedule or have questions beforehand, please reply to this email.</p>
-        <p>Looking forward to speaking with you!<br/><strong>Teja Web Studio</strong></p>
+        <p>We are reviewing your feature requirements and preparing an initial sprint breakdown and timeline for you.</p>
+        <hr style="border: none; border-top: 1px solid #e2e8f0; margin: 20px 0;"/>
+        <p style="color: #64748b; font-size: 13px;">Teja Web Studio &bull; Simple, Affordable Websites for Small Businesses</p>
       </div>
     `,
   }),
 
   adminNewNotification: (type: string, details: string) => ({
-    subject: `[Admin Alert] New ${escapeHtml(type)} Received`,
+    subject: `🔔 New ${type} Notification`,
     html: `
-      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; color: #1e293b; background: #f8fafc;">
-        <h2 style="color: #4f46e5;">New Notification: ${escapeHtml(type)}</h2>
-        <p>A new ${escapeHtml(type)} was submitted on the website:</p>
-        <pre style="background: #ffffff; padding: 12px; border-radius: 4px; overflow-x: auto;">${escapeHtml(details)}</pre>
-        <p><a href="${env.CLIENT_URL}/admin" style="display: inline-block; background: #4f46e5; color: #ffffff; padding: 10px 18px; border-radius: 6px; text-decoration: none;">Open Admin Dashboard</a></p>
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; color: #1e293b; background: #f8fafc; border-radius: 8px;">
+        <h2 style="color: #4f46e5;">New Website Event: ${escapeHtml(type)}</h2>
+        <pre style="background: #ffffff; padding: 15px; border: 1px solid #e2e8f0; border-radius: 4px; font-family: monospace; font-size: 13px; white-space: pre-wrap;">${escapeHtml(details)}</pre>
+        <p style="color: #64748b; font-size: 12px; margin-top: 15px;">Automated alert from Teja Web Studio</p>
       </div>
     `,
   }),

@@ -10,6 +10,7 @@ import { StudioSettingsPage, AdminUsersPage } from './pages/admin/StudioSettings
 import { AdminNotificationsPage } from './pages/admin/AdminNotificationsPage';
 import React from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
+import { ThemeProvider } from './context/ThemeContext';
 import { AuthProvider } from './context/AuthContext';
 import { ChatProvider } from './context/ChatContext';
 
@@ -51,65 +52,71 @@ import { AdminFaqPage } from './pages/admin/AdminFaqPage';
 import { AdminChatsPage } from './pages/admin/AdminChatsPage';
 import { AdminSettingsPage } from './pages/admin/AdminSettingsPage';
 
+import { SmoothScroll } from './components/common/SmoothScroll';
+
 export function App() {
   return (
     <Router>
-      <SettingsProvider>
-        <DialogAccessibility />
-        <Seo />
-        <Notices />
-        <AuthProvider>
-          <ChatProvider>
-            <Routes>
-              {/* Public Consumer Routes */}
-              <Route element={<PublicLayout />}>
-                <Route path="/" element={<HomePage />} />
-                <Route path="/services" element={<ServicesPage />} />
-                <Route path="/services/:slug" element={<ServiceDetailPage />} />
-                <Route path="/portfolio" element={<PortfolioPage />} />
-                <Route path="/portfolio/:slug" element={<ProjectDetailPage />} />
-                <Route path="/pricing" element={<PricingPage />} />
-                <Route path="/track" element={<TrackingPage />} />
-                <Route path="/manage-booking" element={<ManageBookingPage />} />
-                <Route path="/about" element={<AboutPage />} />
-                <Route path="/contact" element={<ContactPage />} />
-                <Route path="/quote" element={<QuotationPage />} />
-                <Route path="/book" element={<BookingPage />} />
-                <Route path="/reviews" element={<ReviewsPage />} />
-                <Route path="/blog" element={<BlogPage />} />
-                <Route path="/blog/:slug" element={<BlogDetailPage />} />
-                <Route path="/faqs" element={<FaqPage />} />
-                <Route path="/privacy" element={<PrivacyPage />} />
-                <Route path="/terms" element={<TermsPage />} />
-                <Route path="*" element={<NotFoundPage />} />
-              </Route>
+      <ThemeProvider>
+        <SmoothScroll>
+          <SettingsProvider>
+            <DialogAccessibility />
+            <Seo />
+            <Notices />
+            <AuthProvider>
+              <ChatProvider>
+                <Routes>
+                  {/* Public Consumer Routes */}
+                  <Route element={<PublicLayout />}>
+                    <Route path="/" element={<HomePage />} />
+                  <Route path="/services" element={<ServicesPage />} />
+                  <Route path="/services/:slug" element={<ServiceDetailPage />} />
+                  <Route path="/portfolio" element={<PortfolioPage />} />
+                  <Route path="/portfolio/:slug" element={<ProjectDetailPage />} />
+                  <Route path="/pricing" element={<PricingPage />} />
+                  <Route path="/track" element={<TrackingPage />} />
+                  <Route path="/manage-booking" element={<ManageBookingPage />} />
+                  <Route path="/about" element={<AboutPage />} />
+                  <Route path="/contact" element={<ContactPage />} />
+                  <Route path="/quote" element={<QuotationPage />} />
+                  <Route path="/book" element={<BookingPage />} />
+                  <Route path="/reviews" element={<ReviewsPage />} />
+                  <Route path="/blog" element={<BlogPage />} />
+                  <Route path="/blog/:slug" element={<BlogDetailPage />} />
+                  <Route path="/faqs" element={<FaqPage />} />
+                  <Route path="/privacy" element={<PrivacyPage />} />
+                  <Route path="/terms" element={<TermsPage />} />
+                  <Route path="*" element={<NotFoundPage />} />
+                </Route>
 
-              {/* Admin Authentication */}
-              <Route path="/admin/login" element={<AdminLoginPage />} />
+                {/* Admin Authentication */}
+                <Route path="/admin/login" element={<AdminLoginPage />} />
 
-              {/* Protected Admin Console Routes */}
-              <Route path="/admin" element={<AdminLayout />}>
-                <Route index element={<Navigate to="/admin/dashboard" replace />} />
-                <Route path="dashboard" element={<AdminDashboardPage />} />
-                <Route path="inquiries" element={<AdminInquiriesPage />} />
-                <Route path="quotations" element={<AdminQuotationsPage />} />
-                <Route path="appointments" element={<AdminAppointmentsPage />} />
-                <Route path="services" element={<AdminServicesPage />} />
-                <Route path="portfolio" element={<AdminProjectsPage />} />
-                <Route path="pricing" element={<AdminPricingPage />} />
-                <Route path="testimonials" element={<TestimonialsEditorPage />} />
-                <Route path="blog" element={<AdminBlogPage />} />
-                <Route path="faqs" element={<AdminFaqPage />} />
-                <Route path="chats" element={<AdminChatsPage />} />
-                <Route path="settings" element={<StudioSettingsPage />} />
-                <Route path="client-projects" element={<AdminClientProjectsPage />} />
-                <Route path="users" element={<AdminUsersPage />} />
-                <Route path="notifications" element={<AdminNotificationsPage />} />
-              </Route>
-            </Routes>
-          </ChatProvider>
-        </AuthProvider>
-      </SettingsProvider>
+                {/* Protected Admin Console Routes */}
+                <Route path="/admin" element={<AdminLayout />}>
+                  <Route index element={<Navigate to="/admin/dashboard" replace />} />
+                  <Route path="dashboard" element={<AdminDashboardPage />} />
+                  <Route path="inquiries" element={<AdminInquiriesPage />} />
+                  <Route path="quotations" element={<AdminQuotationsPage />} />
+                  <Route path="appointments" element={<AdminAppointmentsPage />} />
+                  <Route path="services" element={<AdminServicesPage />} />
+                  <Route path="portfolio" element={<AdminProjectsPage />} />
+                  <Route path="pricing" element={<AdminPricingPage />} />
+                  <Route path="testimonials" element={<TestimonialsEditorPage />} />
+                  <Route path="blog" element={<AdminBlogPage />} />
+                  <Route path="faqs" element={<AdminFaqPage />} />
+                  <Route path="chats" element={<AdminChatsPage />} />
+                  <Route path="settings" element={<StudioSettingsPage />} />
+                  <Route path="client-projects" element={<AdminClientProjectsPage />} />
+                  <Route path="users" element={<AdminUsersPage />} />
+                  <Route path="notifications" element={<AdminNotificationsPage />} />
+                </Route>
+              </Routes>
+            </ChatProvider>
+          </AuthProvider>
+          </SettingsProvider>
+        </SmoothScroll>
+      </ThemeProvider>
     </Router>
   );
 }

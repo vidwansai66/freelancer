@@ -3,7 +3,7 @@ import rateLimit from 'express-rate-limit';
 // Rate limiter for admin login (max 10 requests per 15 minutes)
 export const loginRateLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
-  max: 10,
+  max: process.env.NODE_ENV === 'production' ? 10 : 100,
   message: {
     success: false,
     message: 'Too many login attempts. Please try again after 15 minutes.',

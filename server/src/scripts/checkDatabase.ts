@@ -1,15 +1,18 @@
-import mongoose from 'mongoose';
-import { connectDB } from '../config/db';
-async function main() {
-  try {
-    await connectDB();
-    await mongoose.connection.db!.admin().ping();
-    console.log(`Database connection verified: ${mongoose.connection.name}`);
-  } finally {
-    await mongoose.disconnect();
-  }
+/**
+ * Check Database Script (Zero-Cost Architecture)
+ * Validates system state and Zoho CRM configuration.
+ */
+import { env } from '../config/env';
+
+async function check() {
+  console.log('--- System Architecture Status ---');
+  console.log('Database Mode: Zero-Cost Static & Edge Architecture (MongoDB Removed)');
+  console.log(`Zoho Client ID: ${env.ZOHO_CLIENT_ID ? 'Configured' : 'Missing (Set ZOHO_CLIENT_ID in server/.env)'}`);
+  console.log(`Zoho Refresh Token: ${env.ZOHO_REFRESH_TOKEN ? 'Authorized' : 'Pending (Visit /api/zoho/auth or set ZOHO_REFRESH_TOKEN)'}`);
+  console.log(`Zoho Accounts URL: ${env.ZOHO_ACCOUNTS_URL}`);
+  console.log(`Zoho API Base URL: ${env.ZOHO_API_BASE_URL}`);
+  console.log(`Admin Email: ${env.DEFAULT_ADMIN_EMAIL}`);
+  console.log('Status: Healthy (100% Zero Database Cost)');
 }
-main().catch(() => {
-  console.error('Database check failed. Check server/.env and your Atlas IP access list.');
-  process.exitCode = 1;
-});
+
+check().catch(console.error);

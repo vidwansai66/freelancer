@@ -24,7 +24,7 @@ if (
 }
 
 if (process.env.NODE_ENV === 'production') {
-  for (const key of ['MONGODB_URI', 'JWT_SECRET', 'DEFAULT_ADMIN_PASSWORD', 'CLIENT_URL'])
+  for (const key of ['JWT_SECRET', 'DEFAULT_ADMIN_PASSWORD', 'CLIENT_URL'])
     if (!process.env[key]) throw new Error(key + ' is required in production.');
   if (
     process.env.JWT_SECRET!.length < 32 ||
@@ -42,7 +42,18 @@ export const env = {
   PORT: parseInt(process.env.PORT || '5000', 10),
   NODE_ENV: process.env.NODE_ENV || 'development',
   CLIENT_URL: process.env.CLIENT_URL || 'http://localhost:5173',
-  MONGODB_URI: process.env.MONGODB_URI || 'mongodb://127.0.0.1:27017/freelance_studio',
+  // Zoho CRM Configuration (India Data Center by default)
+  ZOHO_CLIENT_ID: process.env.ZOHO_CLIENT_ID || '',
+  ZOHO_CLIENT_SECRET: process.env.ZOHO_CLIENT_SECRET || '',
+  ZOHO_REDIRECT_URI:
+    process.env.ZOHO_REDIRECT_URI ||
+    (process.env.CLIENT_URL
+      ? `${process.env.CLIENT_URL.replace(/\/+$/, '')}/api/zoho/callback`
+      : 'http://localhost:5000/api/zoho/callback'),
+  ZOHO_REFRESH_TOKEN: process.env.ZOHO_REFRESH_TOKEN || '',
+  ZOHO_ACCOUNTS_URL: process.env.ZOHO_ACCOUNTS_URL || 'https://accounts.zoho.in',
+  ZOHO_API_BASE_URL: process.env.ZOHO_API_BASE_URL || process.env.ZOHO_API_DOMAIN || 'https://www.zohoapis.in/crm/v8',
+  ZOHO_API_DOMAIN: process.env.ZOHO_API_DOMAIN || 'https://www.zohoapis.in',
   JWT_SECRET: process.env.JWT_SECRET!,
   JWT_EXPIRES_IN: process.env.JWT_EXPIRES_IN || '7d',
   DEFAULT_ADMIN_EMAIL: process.env.DEFAULT_ADMIN_EMAIL || 'admin@tejastudio.com',
@@ -57,3 +68,4 @@ export const env = {
   ADMIN_NOTIFICATION_EMAIL: process.env.ADMIN_NOTIFICATION_EMAIL || 'admin@tejastudio.com',
   EMAIL_SERVICE_ENABLED: process.env.EMAIL_SERVICE_ENABLED === 'true',
 };
+

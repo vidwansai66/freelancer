@@ -1,7 +1,6 @@
 import filesRoutes from './filesRoutes';
 import clientProjectsRoutes from './clientProjectsRoutes';
 import { apiValidation } from '../middleware/apiValidation';
-import { Notification } from '../models/Notification';
 import { authenticateAdmin } from '../middleware/authMiddleware';
 import { asyncRouter } from '../utils/asyncRouter';
 import authRoutes from './authRoutes';
@@ -17,25 +16,20 @@ import faqRoutes from './faqRoutes';
 import chatRoutes from './chatRoutes';
 import dashboardRoutes from './dashboardRoutes';
 import settingsRoutes from './settingsRoutes';
+import zohoRoutes from './zohoRoutes';
 
 const router = asyncRouter();
 router.use(apiValidation);
 router.use('/files', filesRoutes);
 router.use('/client-projects', clientProjectsRoutes);
+
 router.get('/notifications', authenticateAdmin, async (req, res) => {
-  const page = Number(req.query.page || 1),
-    limit = Number(req.query.limit || 20);
-  const [data, total] = await Promise.all([
-    Notification.find()
-      .sort({ createdAt: -1 })
-      .skip((page - 1) * limit)
-      .limit(limit),
-    Notification.countDocuments(),
-  ]);
+  const page = Number(req.query.page || 1);
+  const limit = Number(req.query.limit || 20);
   res.json({
     success: true,
-    data,
-    meta: { page, limit, total, totalPages: Math.ceil(total / limit) },
+    data: [],
+    meta: { page, limit, total: 0, totalPages: 1 },
   });
 });
 
@@ -52,5 +46,6 @@ router.use('/faqs', faqRoutes);
 router.use('/chat', chatRoutes);
 router.use('/dashboard', dashboardRoutes);
 router.use('/settings', settingsRoutes);
+router.use('/zoho', zohoRoutes);
 
 export default router;

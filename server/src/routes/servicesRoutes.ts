@@ -1,6 +1,4 @@
-import { listRecords } from '../utils/listRecords';
 import { asyncRouter } from '../utils/asyncRouter';
-import { Service } from '../models/Service';
 import {
   getServices,
   getServiceBySlug,
@@ -8,14 +6,17 @@ import {
   updateService,
   deleteService,
 } from '../controllers/servicesController';
+import { contentStore } from '../services/contentStore';
 import { authenticateAdmin } from '../middleware/authMiddleware';
+import { sendSuccess } from '../utils/apiResponse';
 
 const router = asyncRouter();
 
 // Public routes
 router.get('/', getServices);
 router.get('/admin/all', authenticateAdmin, async (_req, res) => {
-  await listRecords(_req, res, Service, ['title', 'shortDescription'], {}, { orderIndex: 1 });
+  const services = contentStore.getServices(true);
+  sendSuccess(res, services, 'All services retrieved successfully.');
 });
 router.get('/:slug', getServiceBySlug);
 

@@ -79,7 +79,7 @@ export const AdminLayout: React.FC = () => {
             <Sparkles className="h-4 w-4" />
           </span>
           <div>
-            <h2 className="font-display text-sm font-bold text-white tracking-tight">
+            <h2 className="font-display text-sm font-bold text-foreground tracking-tight">
               Studio Admin
             </h2>
             <span className="text-[10px] text-primary font-medium">Control Center</span>
@@ -97,7 +97,7 @@ export const AdminLayout: React.FC = () => {
                 className={`flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-xs font-medium transition-all ${
                   active
                     ? 'bg-primary text-white font-semibold shadow-glow'
-                    : 'text-muted-foreground hover:bg-secondary hover:text-white'
+                    : 'text-muted-foreground hover:bg-secondary hover:text-foreground'
                 }`}
               >
                 {item.icon}
@@ -111,7 +111,7 @@ export const AdminLayout: React.FC = () => {
         <div className="p-4 border-t border-border">
           <div className="flex items-center justify-between mb-3 px-2">
             <div className="truncate">
-              <p className="text-xs font-bold text-white truncate">
+              <p className="text-xs font-bold text-foreground truncate">
                 {admin?.fullName || 'Studio Admin'}
               </p>
               <p className="text-[10px] text-muted-foreground truncate">{admin?.email}</p>
@@ -127,7 +127,7 @@ export const AdminLayout: React.FC = () => {
           <Link
             to="/"
             target="_blank"
-            className="flex items-center justify-center gap-1.5 w-full py-2 rounded-xl bg-secondary hover:bg-muted text-[11px] text-muted-foreground hover:text-white border border-border transition-colors"
+            className="flex items-center justify-center gap-1.5 w-full py-2 rounded-xl bg-secondary hover:bg-muted text-[11px] text-muted-foreground hover:text-foreground border border-border transition-colors"
           >
             <span>Live Website</span>
             <ExternalLink className="h-3 w-3" />
@@ -144,20 +144,20 @@ export const AdminLayout: React.FC = () => {
           <div className="flex items-center gap-4">
             <button
               onClick={() => setMobileSidebarOpen(!mobileSidebarOpen)}
-              className="lg:hidden p-2 rounded-lg text-muted-foreground hover:bg-secondary hover:text-white"
+              className="lg:hidden p-2 rounded-lg text-muted-foreground hover:bg-secondary hover:text-foreground"
             >
               {mobileSidebarOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
             </button>
             <span className="text-xs text-muted-foreground hidden sm:inline">
               Authenticated as:{' '}
-              <strong className="text-white font-medium">{admin?.role || 'Administrator'}</strong>
+              <strong className="text-foreground font-medium">{admin?.role || 'Administrator'}</strong>
             </span>
           </div>
 
           <div className="flex items-center gap-3">
             <Link
               to="/"
-              className="text-xs text-muted-foreground hover:text-white flex items-center gap-1 bg-secondary px-3 py-1.5 rounded-lg border border-border"
+              className="text-xs text-muted-foreground hover:text-foreground flex items-center gap-1 bg-secondary px-3 py-1.5 rounded-lg border border-border"
             >
               <ExternalLink className="h-3 w-3" /> View Website
             </Link>

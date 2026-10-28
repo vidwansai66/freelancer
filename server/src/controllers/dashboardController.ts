@@ -1,92 +1,56 @@
-import { escapeRegex } from '../utils/security';
 import { Request, Response } from 'express';
-import { Inquiry } from '../models/Inquiry';
-import { QuotationRequest } from '../models/QuotationRequest';
-import { Appointment } from '../models/Appointment';
-import { Project } from '../models/Project';
-import { Service } from '../models/Service';
-import { Testimonial } from '../models/Testimonial';
-import { BlogPost } from '../models/BlogPost';
-import { ChatConversation } from '../models/ChatConversation';
+import { contentStore } from '../services/contentStore';
 import { sendSuccess, sendError } from '../utils/apiResponse';
+import { env } from '../config/env';
 
 export const getDashboardStats = async (_req: Request, res: Response): Promise<void> => {
   try {
-    const todayStr = new Date().toISOString().split('T')[0];
-
-    const [
-      totalInquiries,
-      newInquiries,
-      totalQuotations,
-      newQuotations,
-      quotationValues,
-      totalAppointments,
-      confirmedAppointments,
-      todayAppointments,
-      totalProjects,
-      totalServices,
-      totalTestimonials,
-      pendingTestimonials,
-      totalBlogPosts,
-      activeChats,
-      recentInquiries,
-      recentAppointments,
-      recentQuotations,
-    ] = await Promise.all([
-      Inquiry.countDocuments(),
-      Inquiry.countDocuments({ status: 'new' }),
-      QuotationRequest.countDocuments(),
-      QuotationRequest.countDocuments({ status: 'new' }),
-      QuotationRequest.aggregate([
-        { $group: { _id: null, totalValue: { $sum: '$estimatedQuote' } } },
-      ]),
-      Appointment.countDocuments(),
-      Appointment.countDocuments({ status: 'confirmed' }),
-      Appointment.countDocuments({ appointmentDate: todayStr, status: 'confirmed' }),
-      Project.countDocuments(),
-      Service.countDocuments(),
-      Testimonial.countDocuments(),
-      Testimonial.countDocuments({ isApproved: false }),
-      BlogPost.countDocuments({ isPublished: true }),
-      ChatConversation.countDocuments({ status: 'active', 'messages.sender': 'client' }),
-      Inquiry.find().sort({ createdAt: -1 }).limit(5),
-      Appointment.find().sort({ appointmentDate: 1, startTime: 1 }).limit(5),
-      QuotationRequest.find().sort({ createdAt: -1 }).limit(5),
-    ]);
-
-    const pipelineValue = quotationValues.length > 0 ? quotationValues[0].totalValue : 0;
+    const services = contentStore.getServices(true);
+    const projects = contentStore.getProjects().total;
+    const pricingPlans = contentStore.getPricingPlans(true);
+    const testimonials = contentStore.getTestimonials(true);
+    const faqs = contentStore.getFaqs(true);
+    const blogPosts = contentStore.getBlogPosts().total;
 
     sendSuccess(
       res,
       {
         kpi: {
           inquiries: {
-            total: totalInquiries,
-            new: newInquiries,
+            total: 0,
+            new: 0,
           },
           quotations: {
-            total: totalQuotations,
-            new: newQuotations,
-            pipelineValue,
+            total: 0,
+            new: 0,
+            pipelineValue: 0,
           },
           appointments: {
-            total: totalAppointments,
-            confirmed: confirmedAppointments,
-            today: todayAppointments,
+            total: 0,
+            confirmed: 0,
+            today: 0,
           },
           content: {
-            projects: totalProjects,
-            services: totalServices,
-            testimonials: totalTestimonials,
-            pendingReviews: pendingTestimonials,
-            blogPosts: totalBlogPosts,
-            activeChats,
+            projects,
+            services: services.length,
+            testimonials: testimonials.length,
+            pendingReviews: 0,
+            blogPosts,
+            activeChats: 0,
+            faqs: faqs.length,
+            pricingPlans: pricingPlans.length,
+          },
+          crm: {
+            provider: 'Zoho CRM (India DC)',
+            isConfigured: Boolean(env.ZOHO_CLIENT_ID?.trim() && env.ZOHO_REFRESH_TOKEN?.trim()),
+            portalUrl: 'https://crm.zoho.in',
+            authUrl: '/api/zoho/auth',
           },
         },
         recentActivity: {
-          inquiries: recentInquiries,
-          appointments: recentAppointments,
-          quotations: recentQuotations,
+          inquiries: [],
+          appointments: [],
+          quotations: [],
         },
       },
       'Dashboard analytics retrieved successfully.',

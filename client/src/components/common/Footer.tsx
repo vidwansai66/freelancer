@@ -13,7 +13,7 @@ export const Footer: React.FC = () => {
           <div className="md:col-span-1 space-y-4">
             <Link
               to="/"
-              className="flex items-center gap-2 font-display text-lg font-bold tracking-tight text-white"
+              className="flex items-center gap-2 font-display text-lg font-bold tracking-tight text-foreground"
             >
               <span className="flex h-6 w-6 items-center justify-center rounded-lg bg-primary/20 text-primary border border-primary/30">
                 <Sparkles className="h-3.5 w-3.5" />
@@ -38,7 +38,7 @@ export const Footer: React.FC = () => {
 
           {/* Col 2: Navigation */}
           <div>
-            <h4 className="font-display text-sm font-semibold text-white uppercase tracking-wider mb-4">
+            <h4 className="font-display text-sm font-semibold text-foreground uppercase tracking-wider mb-4">
               Explore
             </h4>
             <ul className="space-y-2.5 text-xs">
@@ -82,7 +82,7 @@ export const Footer: React.FC = () => {
 
           {/* Col 3: Work & Connect */}
           <div>
-            <h4 className="font-display text-sm font-semibold text-white uppercase tracking-wider mb-4">
+            <h4 className="font-display text-sm font-semibold text-foreground uppercase tracking-wider mb-4">
               Start Here
             </h4>
             <ul className="space-y-2.5 text-xs">
@@ -108,7 +108,7 @@ export const Footer: React.FC = () => {
               </li>
               <li>
                 <a
-                  href="https://wa.me/1234567890"
+                  href={`https://wa.me/${(settings.whatsappNumber || '919490955048').replace(/[^0-9]/g, '')}`}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="hover:text-primary transition-colors"
@@ -121,7 +121,7 @@ export const Footer: React.FC = () => {
 
           {/* Col 4: Trust & Legal */}
           <div>
-            <h4 className="font-display text-sm font-semibold text-white uppercase tracking-wider mb-4">
+            <h4 className="font-display text-sm font-semibold text-foreground uppercase tracking-wider mb-4">
               Guarantees
             </h4>
             <ul className="space-y-2.5 text-xs">
@@ -138,11 +138,11 @@ export const Footer: React.FC = () => {
                 <span>Secure SSL & Performance</span>
               </li>
               <li className="pt-2">
-                <Link to="/privacy" className="hover:text-white transition-colors">
+                <Link to="/privacy" className="hover:text-foreground transition-colors">
                   Privacy Policy
                 </Link>
                 {' • '}
-                <Link to="/terms" className="hover:text-white transition-colors">
+                <Link to="/terms" className="hover:text-foreground transition-colors">
                   Terms of Service
                 </Link>
               </li>
@@ -165,10 +165,10 @@ export const Footer: React.FC = () => {
             © {new Date().getFullYear()} {settings.studioName}. All rights reserved.
           </p>
           <div className="flex items-center gap-4">
-            <Link to="/privacy" className="hover:text-white">
+            <Link to="/privacy" className="hover:text-foreground">
               Privacy
             </Link>
-            <Link to="/terms" className="hover:text-white">
+            <Link to="/terms" className="hover:text-foreground">
               Terms
             </Link>
             <span className="text-border">|</span>

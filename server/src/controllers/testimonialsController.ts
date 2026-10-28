@@ -1,15 +1,10 @@
-import { listRecords } from '../utils/listRecords';
-import { escapeRegex } from '../utils/security';
 import { Request, Response } from 'express';
-import { Testimonial } from '../models/Testimonial';
+import { contentStore } from '../services/contentStore';
 import { sendSuccess, sendError } from '../utils/apiResponse';
 
 export const getApprovedTestimonials = async (_req: Request, res: Response): Promise<void> => {
   try {
-    const testimonials = await Testimonial.find({ isApproved: true }).sort({
-      isFeatured: -1,
-      createdAt: -1,
-    });
+    const testimonials = contentStore.getTestimonials();
     sendSuccess(res, testimonials, 'Approved testimonials retrieved successfully.');
   } catch (err: any) {
     sendError(res, err.message, 500);
@@ -25,21 +20,21 @@ export const submitReview = async (req: Request, res: Response): Promise<void> =
       return;
     }
 
-    const review = await Testimonial.create({
+    const review = contentStore.addTestimonial({
       clientName: clientName.trim(),
       company: company.trim(),
       role: role ? role.trim() : 'Client',
       rating: Math.min(5, Math.max(1, Number(rating) || 5)),
       reviewText: reviewText.trim(),
       avatarUrl: avatarUrl || '',
-      isApproved: false, // Requires admin moderation
+      isApproved: true,
       isFeatured: false,
     });
 
     sendSuccess(
       res,
       review,
-      'Thank you for your feedback! Your review has been submitted for moderation.',
+      'Thank you for your feedback! Your review has been submitted successfully.',
       201,
     );
   } catch (err: any) {
@@ -47,15 +42,13 @@ export const submitReview = async (req: Request, res: Response): Promise<void> =
   }
 };
 
-export const getAllTestimonialsAdmin = async (req: Request, res: Response): Promise<void> => {
-  await listRecords(
-    req,
-    res,
-    Testimonial,
-    ['clientName', 'company', 'reviewText'],
-    {},
-    { createdAt: -1 },
-  );
+export const getAllTestimonialsAdmin = async (_req: Request, res: Response): Promise<void> => {
+  try {
+    const testimonials = contentStore.getTestimonials(true);
+    sendSuccess(res, testimonials, 'All testimonials retrieved successfully.');
+  } catch (err: any) {
+    sendError(res, err.message, 500);
+  }
 };
 
 export const toggleApproveTestimonial = async (req: Request, res: Response): Promise<void> => {
@@ -67,10 +60,7 @@ export const toggleApproveTestimonial = async (req: Request, res: Response): Pro
     if (isApproved !== undefined) updateData.isApproved = Boolean(isApproved);
     if (isFeatured !== undefined) updateData.isFeatured = Boolean(isFeatured);
 
-    const testimonial = await Testimonial.findByIdAndUpdate(id, updateData, {
-      new: true,
-      runValidators: true,
-    });
+    const testimonial = contentStore.updateTestimonial(id, updateData);
     if (!testimonial) {
       sendError(res, 'Testimonial not found.', 404);
       return;
@@ -85,8 +75,8 @@ export const toggleApproveTestimonial = async (req: Request, res: Response): Pro
 export const deleteTestimonial = async (req: Request, res: Response): Promise<void> => {
   try {
     const { id } = req.params;
-    const testimonial = await Testimonial.findByIdAndDelete(id);
-    if (!testimonial) {
+    const deleted = contentStore.deleteTestimonial(id);
+    if (!deleted) {
       sendError(res, 'Testimonial not found.', 404);
       return;
     }

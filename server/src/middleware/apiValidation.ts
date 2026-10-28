@@ -19,15 +19,16 @@ const url = z.union([
     .refine((value) => /^https?:\/\//.test(value), 'Use an HTTP or HTTPS URL'),
   z.literal(''),
 ]);
-const image = z.union([url, z.string().regex(/^\/api\/files\/[a-f0-9]{24}$/)]);
+const image = z.union([url, z.string().regex(/^\/api\/files\/[a-zA-Z0-9_-]{1,64}$/)]);
 const count = z.number().int().min(0).max(1000000);
 const money = z.number().min(0).max(100000000);
 const time = z.string().regex(/^(?:[01]\d|2[0-3]):[0-5]\d$/);
 const date = z.string().refine(validDate, 'Invalid calendar date');
 const stringList = z.array(text).max(100);
 const token = z.string().regex(/^[a-f0-9]{64}$/);
-const oid = z.string().regex(/^[a-f0-9]{24}$/);
-const attachments = z.array(z.object({ fileId: oid, token })).max(5);
+const fileIdSchema = z.string().regex(/^[a-zA-Z0-9_-]{1,64}$/);
+const oid = fileIdSchema;
+const attachments = z.array(z.object({ fileId: fileIdSchema, token })).max(5);
 const objects: Record<string, z.ZodObject<any>> = {
   inquiries: z.object({
     name: text.min(1),
@@ -204,7 +205,7 @@ export const apiValidation = (req: Request, res: Response, next: NextFunction) =
     const [module, id, action] = segments;
     if (
       id &&
-      /^[a-f0-9]{24}$/i.test(id) === false &&
+      /^[a-zA-Z0-9_-]{1,64}$/i.test(id) === false &&
       ['PUT', 'DELETE'].includes(req.method) &&
       module !== 'chat' &&
       module !== 'auth'

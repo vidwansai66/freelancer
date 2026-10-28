@@ -1,7 +1,5 @@
-import { listRecords } from '../utils/listRecords';
-import { escapeRegex } from '../utils/security';
 import { Request, Response } from 'express';
-import { BlogPost } from '../models/BlogPost';
+import { contentStore } from '../services/contentStore';
 import { sendSuccess, sendError } from '../utils/apiResponse';
 import { slugify } from '../utils/slugify';
 
@@ -9,32 +7,18 @@ export const getPublishedPosts = async (req: Request, res: Response): Promise<vo
   try {
     const { tag, search, page = '1', limit = '9' } = req.query;
 
-    const query: any = { isPublished: true };
-    if (tag) {
-      query.tags = tag;
-    }
+    const result = contentStore.getBlogPosts({
+      tag: tag ? String(tag) : undefined,
+      search: search ? String(search) : undefined,
+      page: Math.max(1, parseInt(String(page), 10)),
+      limit: Math.max(1, parseInt(String(limit), 10)),
+    });
 
-    if (search) {
-      query.$or = [
-        { title: { $regex: escapeRegex(String(search)), $options: 'i' } },
-        { summary: { $regex: escapeRegex(String(search)), $options: 'i' } },
-      ];
-    }
-
-    const pageNum = Math.max(1, parseInt(String(page), 10));
-    const limitNum = Math.max(1, parseInt(String(limit), 10));
-    const skip = (pageNum - 1) * limitNum;
-
-    const [posts, total] = await Promise.all([
-      BlogPost.find(query).sort({ publishedAt: -1 }).skip(skip).limit(limitNum),
-      BlogPost.countDocuments(query),
-    ]);
-
-    sendSuccess(res, posts, 'Blog posts retrieved successfully.', 200, {
-      page: pageNum,
-      limit: limitNum,
-      total,
-      totalPages: Math.ceil(total / limitNum),
+    sendSuccess(res, result.data, 'Blog posts retrieved successfully.', 200, {
+      page: result.page,
+      limit: parseInt(String(limit), 10),
+      total: result.total,
+      totalPages: result.totalPages,
     });
   } catch (err: any) {
     sendError(res, err.message, 500);
@@ -44,7 +28,7 @@ export const getPublishedPosts = async (req: Request, res: Response): Promise<vo
 export const getPostBySlug = async (req: Request, res: Response): Promise<void> => {
   try {
     const { slug } = req.params;
-    const post = await BlogPost.findOne({ slug, isPublished: true });
+    const post = contentStore.getBlogPostBySlug(slug);
     if (!post) {
       sendError(res, 'Article not found.', 404);
       return;
@@ -56,7 +40,19 @@ export const getPostBySlug = async (req: Request, res: Response): Promise<void> 
 };
 
 export const getAllPostsAdmin = async (req: Request, res: Response): Promise<void> => {
-  await listRecords(req, res, BlogPost, ['title', 'summary'], {}, { createdAt: -1 });
+  try {
+    const result = contentStore.getBlogPosts({
+      page: Math.max(1, parseInt(String(req.query.page || '1'), 10)),
+      limit: Math.max(1, parseInt(String(req.query.limit || '50'), 10)),
+    });
+    sendSuccess(res, result.data, 'All articles retrieved successfully.', 200, {
+      total: result.total,
+      page: result.page,
+      totalPages: result.totalPages,
+    });
+  } catch (err: any) {
+    sendError(res, err.message, 500);
+  }
 };
 
 export const createBlogPost = async (req: Request, res: Response): Promise<void> => {
@@ -80,9 +76,7 @@ export const createBlogPost = async (req: Request, res: Response): Promise<void>
 
     const finalSlug = slug ? slugify(slug) : slugify(title);
 
-    const post = await BlogPost.create({
-      seoTitle: req.body.seoTitle || '',
-      seoDescription: req.body.seoDescription || '',
+    const post = contentStore.addBlogPost({
       title,
       slug: finalSlug,
       summary,
@@ -92,15 +86,10 @@ export const createBlogPost = async (req: Request, res: Response): Promise<void>
       tags: Array.isArray(tags) ? tags : [],
       readTimeMinutes: Number(readTimeMinutes) || 5,
       isPublished: isPublished !== undefined ? Boolean(isPublished) : true,
-      publishedAt: isPublished ? new Date() : undefined,
     });
 
     sendSuccess(res, post, 'Article created successfully.', 201);
   } catch (err: any) {
-    if (err.code === 11000) {
-      sendError(res, 'An article with this slug already exists.', 409);
-      return;
-    }
     sendError(res, err.message, 500);
   }
 };
@@ -114,10 +103,7 @@ export const updateBlogPost = async (req: Request, res: Response): Promise<void>
       updateData.slug = slugify(updateData.title);
     }
 
-    const post = await BlogPost.findByIdAndUpdate(id, updateData, {
-      new: true,
-      runValidators: true,
-    });
+    const post = contentStore.updateBlogPost(id, updateData);
     if (!post) {
       sendError(res, 'Article not found.', 404);
       return;
@@ -132,8 +118,8 @@ export const updateBlogPost = async (req: Request, res: Response): Promise<void>
 export const deleteBlogPost = async (req: Request, res: Response): Promise<void> => {
   try {
     const { id } = req.params;
-    const post = await BlogPost.findByIdAndDelete(id);
-    if (!post) {
+    const deleted = contentStore.deleteBlogPost(id);
+    if (!deleted) {
       sendError(res, 'Article not found.', 404);
       return;
     }

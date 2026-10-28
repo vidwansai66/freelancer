@@ -1,21 +1,24 @@
-import { listRecords } from '../utils/listRecords';
-import { escapeRegex } from '../utils/security';
 import { Request, Response } from 'express';
-import { PricingPlan } from '../models/PricingPlan';
+import { contentStore } from '../services/contentStore';
 import { sendSuccess, sendError } from '../utils/apiResponse';
 import { slugify } from '../utils/slugify';
 
 export const getPricingPlans = async (_req: Request, res: Response): Promise<void> => {
   try {
-    const plans = await PricingPlan.find({ isActive: true }).sort({ orderIndex: 1, price: 1 });
+    const plans = contentStore.getPricingPlans();
     sendSuccess(res, plans, 'Pricing plans retrieved successfully.');
   } catch (err: any) {
     sendError(res, err.message, 500);
   }
 };
 
-export const getAllPricingPlansAdmin = async (req: Request, res: Response): Promise<void> => {
-  await listRecords(req, res, PricingPlan, ['name', 'description'], {}, { orderIndex: 1 });
+export const getAllPricingPlansAdmin = async (_req: Request, res: Response): Promise<void> => {
+  try {
+    const plans = contentStore.getPricingPlans(true);
+    sendSuccess(res, plans, 'All pricing plans retrieved successfully.');
+  } catch (err: any) {
+    sendError(res, err.message, 500);
+  }
 };
 
 export const createPricingPlan = async (req: Request, res: Response): Promise<void> => {
@@ -39,7 +42,7 @@ export const createPricingPlan = async (req: Request, res: Response): Promise<vo
     }
 
     const slug = slugify(name);
-    const plan = await PricingPlan.create({
+    const plan = contentStore.addPricingPlan({
       name,
       slug,
       price: Number(price),
@@ -68,10 +71,7 @@ export const updatePricingPlan = async (req: Request, res: Response): Promise<vo
       updateData.slug = slugify(updateData.name);
     }
 
-    const plan = await PricingPlan.findByIdAndUpdate(id, updateData, {
-      new: true,
-      runValidators: true,
-    });
+    const plan = contentStore.updatePricingPlan(id, updateData);
     if (!plan) {
       sendError(res, 'Pricing plan not found.', 404);
       return;
@@ -86,8 +86,8 @@ export const updatePricingPlan = async (req: Request, res: Response): Promise<vo
 export const deletePricingPlan = async (req: Request, res: Response): Promise<void> => {
   try {
     const { id } = req.params;
-    const plan = await PricingPlan.findByIdAndDelete(id);
-    if (!plan) {
+    const deleted = contentStore.deletePricingPlan(id);
+    if (!deleted) {
       sendError(res, 'Pricing plan not found.', 404);
       return;
     }

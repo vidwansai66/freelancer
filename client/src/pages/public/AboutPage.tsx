@@ -30,9 +30,9 @@ export const AboutPage: React.FC = () => {
       desc: 'REST API micro-architecture with robust rate-limiting',
     },
     {
-      name: 'MongoDB Atlas',
-      category: 'Database',
-      desc: 'Cloud NoSQL database with atomic locking indexes',
+      name: 'Zoho CRM',
+      category: 'Lead Management',
+      desc: 'Zero-cost CRM integration for automated contact and lead synchronization',
     },
   ];
 

@@ -1,50 +1,9 @@
 const { test, expect } = require('@playwright/test');
 const AxeBuilder = require('@axe-core/playwright').default;
 const { env } = require('../../server/dist/config/env');
-const { createRequire } = require('node:module');
-const path = require('node:path');
-const mongoose = createRequire(path.resolve(__dirname, '../../server/package.json'))('mongoose');
-const { Inquiry } = require('../../server/dist/models/Inquiry');
-const { QuotationRequest } = require('../../server/dist/models/QuotationRequest');
-const { ClientProject } = require('../../server/dist/models/ClientProject');
-const { Service } = require('../../server/dist/models/Service');
-const { Upload } = require('../../server/dist/models/Upload');
-const { Appointment } = require('../../server/dist/models/Appointment');
-const { BookingLock } = require('../../server/dist/models/BookingLock');
-const { Notification } = require('../../server/dist/models/Notification');
-const { ChatConversation } = require('../../server/dist/models/ChatConversation');
 const marker = `browser-${Date.now()}`,
   email = `${marker}@example.test`;
-const created = [];
-const sessions = [];
-test.afterEach(async ({ page }) => {
-  const id = await page
-    .evaluate(() => localStorage.getItem('studio_chat_session_id'))
-    .catch(() => null);
-  if (id) sessions.push(id);
-});
-test.afterAll(async () => {
-  await mongoose.connect(env.MONGODB_URI);
-  await ChatConversation.deleteMany({ sessionId: { $in: sessions } });
-  await BookingLock.deleteMany({
-    appointmentId: { $in: created.filter(([model]) => model === Appointment).map(([, id]) => id) },
-  });
-  for (const [model, id] of created.reverse()) await model.deleteOne({ _id: id });
-  // Browser fixtures use this exact unique address or title, never a shared cleanup prefix.
-  const leads = await Inquiry.find({ email });
-  const quotes = await QuotationRequest.find({ email });
-  const ids = [...leads, ...quotes].map((record) => String(record._id));
-  const uploads = await Upload.find({ owner: { $in: quotes.map((record) => record._id) } });
-  for (const upload of uploads) await Upload.deleteOne({ _id: upload._id });
-  for (const lead of [...leads, ...quotes]) await lead.deleteOne();
-  await Notification.deleteMany({
-    $or: [
-      { to: email },
-      { referenceId: { $in: [...ids, ...created.map(([, id]) => String(id))] } },
-    ],
-  });
-  await mongoose.disconnect();
-});
+
 async function login(page) {
   await page.goto('/admin/login');
   await page.getByLabel(/Admin Email/i).fill(env.DEFAULT_ADMIN_EMAIL);
