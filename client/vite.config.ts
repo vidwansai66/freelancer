@@ -5,6 +5,9 @@ function htmlSeoPlugin(): Plugin {
   return {
     name: 'html-seo-plugin',
     transformIndexHtml(html) {
+      if (html.includes('name="google-site-verification"')) {
+        return html;
+      }
       const verificationToken =
         process.env.VITE_GOOGLE_SITE_VERIFICATION ||
         process.env.GOOGLE_SITE_VERIFICATION;

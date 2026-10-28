@@ -502,5 +502,16 @@ test('Google Search Console: HTML-file verification route serves exact verificat
   assert.equal(body.trim(), `google-site-verification: google${testCode}.html`);
 });
 
+test('Google Search Console: client/index.html contains exact verification meta tag', async () => {
+  const fs = require('fs');
+  const path = require('path');
+  const indexPath = path.resolve(__dirname, '../client/index.html');
+  const html = fs.readFileSync(indexPath, 'utf-8');
+  assert.ok(
+    html.includes('<meta name="google-site-verification" content="vpRHYVBANNZh4rlaUkJJOCIKekDSs2ZCuyOBVTpYIIo" />'),
+    'client/index.html must contain the exact google-site-verification meta tag',
+  );
+});
+
 
 
