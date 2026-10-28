@@ -34,6 +34,9 @@ export const AdminAppointmentsPage: React.FC = () => {
     [editSlots, setEditSlots] = useState<any[]>([]);
   const [notesInput, setNotesInput] = useState('');
   const [saveLoading, setSaveLoading] = useState(false);
+  const [feedback, setFeedback] = useState<{ type: 'success' | 'error'; message: string } | null>(
+    null,
+  );
 
   const fetchAppointments = () => {
     setLoading(true);
@@ -68,6 +71,7 @@ export const AdminAppointmentsPage: React.FC = () => {
     setMeetingLink(app.meetingLink || '');
     setStatusInput(app.status);
     setNotesInput(app.notes || '');
+    setFeedback(null);
   };
 
   const handleUpdate = async (e: React.FormEvent) => {
@@ -75,21 +79,38 @@ export const AdminAppointmentsPage: React.FC = () => {
     if (!selectedAppointment) return;
 
     setSaveLoading(true);
+    setFeedback(null);
     try {
-      await appointmentsApi.update(selectedAppointment._id, {
-        meetingLink,
+      const updated = await appointmentsApi.update(selectedAppointment._id, {
+        meetingLink: meetingLink.trim(),
         appointmentDate: newDate,
         startTime: newTime,
         endTime:
           editSlots.find((slot) => slot.startTime === newTime)?.endTime ||
           selectedAppointment.endTime,
         status: statusInput,
-        notes: notesInput,
+        notes: notesInput.trim(),
       });
+      setFeedback({
+        type: 'success',
+        message: 'Meeting link and appointment details updated successfully!',
+      });
+      // Synchronize in local state immediately
+      setAppointments((prev) =>
+        prev.map((app) =>
+          app._id === selectedAppointment._id ? { ...app, ...updated, meetingLink: meetingLink.trim() } : app,
+        ),
+      );
       setSelectedAppointment(null);
       fetchAppointments();
-    } catch (err) {
-      console.error(err);
+    } catch (err: any) {
+      setFeedback({
+        type: 'error',
+        message:
+          err.response?.data?.error ||
+          err.response?.data?.message ||
+          'Failed to update appointment.',
+      });
     } finally {
       setSaveLoading(false);
     }
@@ -139,6 +160,25 @@ export const AdminAppointmentsPage: React.FC = () => {
           ))}
         </div>
       </div>
+
+      {feedback && (
+        <div
+          role={feedback.type === 'error' ? 'alert' : 'status'}
+          className={`rounded-2xl p-4 text-xs font-medium flex items-center justify-between border ${
+            feedback.type === 'success'
+              ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30'
+              : 'bg-rose-500/10 text-rose-400 border-rose-500/30'
+          }`}
+        >
+          <span>{feedback.message}</span>
+          <button
+            onClick={() => setFeedback(null)}
+            className="text-xs underline hover:opacity-80 ml-3"
+          >
+            Dismiss
+          </button>
+        </div>
+      )}
 
       {/* Date Filter Bar */}
       <div className="flex items-center gap-3">

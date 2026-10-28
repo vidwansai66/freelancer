@@ -8,7 +8,12 @@ export interface IAppointment {
   startTime: string;
   endTime: string;
   status: 'pending' | 'confirmed' | 'cancelled' | 'completed';
+  meetingLink?: string;
   notes?: string;
   manageToken: string;
+  manageTokenHash?: string;
+  timeZone?: string;
   createdAt: Date;
+  updatedAt?: Date;
 }
+

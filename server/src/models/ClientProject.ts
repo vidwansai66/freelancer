@@ -8,7 +8,10 @@ export interface IClientProject {
   proposal?: string;
   quoteAmount?: number;
   status: string;
+  meetingLink?: string;
   tokenHash: string;
   documents: string[];
+  updates?: Array<{ text: string; at: string }>;
   createdAt: Date;
 }
+

@@ -15,7 +15,16 @@ import { TimeSlot } from '../../types';
 
 export const BookingPage: React.FC = () => {
   const { settings } = useSettings();
-  const [requestKey] = useState(() => crypto.randomUUID());
+  const [requestKey, setRequestKey] = useState(() => crypto.randomUUID());
+  const [clientBookings, setClientBookings] = useState<any[]>(() => {
+    try {
+      const saved = localStorage.getItem('client_recent_bookings');
+      return saved ? JSON.parse(saved) : [];
+    } catch {
+      return [];
+    }
+  });
+
   // Service selection
   const serviceOptions = [
     {
@@ -97,7 +106,7 @@ export const BookingPage: React.FC = () => {
     setBookingLoading(true);
     try {
       const idempotencyKey = requestKey;
-      const appointment = await appointmentsApi.book({
+      const res = await appointmentsApi.book({
         clientName: clientName.trim(),
         clientEmail: clientEmail.toLowerCase().trim(),
         clientPhone: clientPhone.trim(),
@@ -109,7 +118,47 @@ export const BookingPage: React.FC = () => {
         idempotencyKey,
       });
 
+      // Normalize appointment properties regardless of wrapper
+      const appointment = {
+        _id: res._id || res.id || res.appointment?._id,
+        clientName: res.clientName || res.appointment?.clientName || clientName.trim(),
+        clientEmail: res.clientEmail || res.appointment?.clientEmail || clientEmail.trim(),
+        clientPhone: res.clientPhone || res.appointment?.clientPhone || clientPhone.trim(),
+        serviceType: res.serviceType || res.appointment?.serviceType || selectedService,
+        appointmentDate: res.appointmentDate || res.appointment?.appointmentDate || selectedDate,
+        startTime: res.startTime || res.appointment?.startTime || selectedSlot.startTime,
+        endTime: res.endTime || res.appointment?.endTime || selectedSlot.endTime,
+        meetingLink:
+          res.meetingLink ||
+          res.appointment?.meetingLink ||
+          'https://meet.google.com/stw-cons-call',
+        manageToken: res.manageToken || res.appointment?.manageToken,
+        status: res.status || res.appointment?.status || 'confirmed',
+        notes: res.notes || res.appointment?.notes || notes.trim(),
+        whatsappConnectUrl: res.whatsappConnectUrl,
+      };
+
       setConfirmedBooking(appointment);
+
+      // Save to client bookings array
+      const updatedList = [
+        appointment,
+        ...clientBookings.filter((b) => b._id !== appointment._id),
+      ];
+      setClientBookings(updatedList);
+
+      try {
+        localStorage.setItem('client_recent_bookings', JSON.stringify(updatedList));
+        const tokens: string[] = JSON.parse(
+          localStorage.getItem('client_booking_tokens') || '[]',
+        );
+        if (appointment.manageToken && !tokens.includes(appointment.manageToken)) {
+          tokens.unshift(appointment.manageToken);
+          localStorage.setItem('client_booking_tokens', JSON.stringify(tokens));
+        }
+      } catch {
+        // Ignore localStorage quota errors
+      }
     } catch (err: any) {
       const errorMsg =
         err.response?.data?.message ||
@@ -250,12 +299,67 @@ END:VCALENDAR`;
                 onClick={() => {
                   setConfirmedBooking(null);
                   setSelectedSlot(null);
+                  setRequestKey(crypto.randomUUID());
+                  setNotes('');
+                  setErrorMessage(null);
+                  if (selectedDate) {
+                    appointmentsApi.getAvailableSlots(selectedDate).then((data) => {
+                      setAvailableSlots(data.slots || []);
+                    });
+                  }
                 }}
                 className="rounded-full border border-border bg-card px-6 py-2.5 text-xs font-semibold text-muted-foreground hover:text-white"
               >
                 Book another appointment
               </button>
             </div>
+
+            {/* If client has multiple bookings booked in this session */}
+            {clientBookings.length > 1 && (
+              <div className="pt-6 border-t border-border/80 text-left space-y-4">
+                <div className="flex items-center justify-between">
+                  <h4 className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
+                    All Scheduled Consultations ({clientBookings.length})
+                  </h4>
+                  <a
+                    href={`/manage-booking#${confirmedBooking.manageToken}`}
+                    className="text-xs text-primary hover:underline"
+                  >
+                    Manage Online →
+                  </a>
+                </div>
+                <div className="grid gap-3 sm:grid-cols-2">
+                  {clientBookings.map((b, idx) => (
+                    <div
+                      key={b._id || idx}
+                      className="rounded-xl border border-border bg-secondary/30 p-3.5 space-y-2 text-xs"
+                    >
+                      <div className="flex items-center justify-between">
+                        <span className="font-semibold text-white truncate max-w-[150px]">
+                          {b.serviceType}
+                        </span>
+                        <span className="rounded-full bg-emerald-500/10 text-emerald-400 px-2 py-0.5 text-[10px] font-semibold capitalize">
+                          {b.status || 'confirmed'}
+                        </span>
+                      </div>
+                      <p className="text-muted-foreground font-mono text-[11px]">
+                        {b.appointmentDate} · {b.startTime}–{b.endTime}
+                      </p>
+                      {b.meetingLink && (
+                        <a
+                          href={b.meetingLink}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-flex items-center gap-1 text-[11px] text-primary hover:underline font-medium"
+                        >
+                          <Video className="h-3 w-3" /> Video Link
+                        </a>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
         ) : (
           /* ======================================================== */

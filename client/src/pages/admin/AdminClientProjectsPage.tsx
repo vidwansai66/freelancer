@@ -25,6 +25,8 @@ export function AdminClientProjectsPage() {
     [amount, setAmount] = useState(0),
     [documents, setDocuments] = useState<any[]>([]),
     [code, setCode] = useState(''),
+    [meetingLink, setMeetingLink] = useState(''),
+    [successMessage, setSuccessMessage] = useState(''),
     [error, setError] = useState('');
   const load = async () => {
     const response = await api.get('/client-projects', { params: { page, limit: 20, search } });
@@ -51,13 +53,23 @@ export function AdminClientProjectsPage() {
     setProposal(project.proposal || '');
     setAmount(project.quoteAmount || 0);
     setDocuments(project.documents || []);
+    setMeetingLink(project.meetingLink || '');
     setUpdate('');
     setCode('');
+    setError('');
+    setSuccessMessage('');
   };
   return (
     <div className="space-y-6">
-      <h1 className="text-2xl">Client projects</h1>
-      <p>Convert a customer request, prepare the quotation and share a private progress code.</p>
+      <h1 className="text-2xl font-bold text-white">Client projects</h1>
+      <p className="text-xs text-muted-foreground">
+        Convert customer inquiries into client projects, prepare quotations, schedule review calls, and share private tracking codes.
+      </p>
+      {successMessage && (
+        <div role="status" className="rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-3.5 text-xs text-emerald-300">
+          {successMessage}
+        </div>
+      )}
       {error && (
         <p role="alert" className="text-rose-300">
           {error}
@@ -151,6 +163,7 @@ export function AdminClientProjectsPage() {
           onSubmit={async (e) => {
             e.preventDefault();
             setError('');
+            setSuccessMessage('');
             try {
               await api.put(`/client-projects/${selected._id}`, {
                 status,
@@ -158,15 +171,17 @@ export function AdminClientProjectsPage() {
                 proposal,
                 quoteAmount: amount,
                 documents: documents.map((file) => file._id || file.fileId),
+                meetingLink: meetingLink.trim(),
               });
+              setSuccessMessage('Client project and meeting link saved successfully!');
               setUpdate('');
               await load();
             } catch (err: any) {
-              setError(err.response?.data?.error || 'Save failed.');
+              setError(err.response?.data?.error || err.message || 'Save failed.');
             }
           }}
         >
-          <h2>{selected.title}</h2>
+          <h2 className="text-lg font-bold text-white">{selected.title}</h2>
           <label htmlFor="project-status">Project status</label>
           <select
             id="project-status"
@@ -182,6 +197,12 @@ export function AdminClientProjectsPage() {
               ),
             )}
           </select>
+          <Field
+            label="Video meeting / review link"
+            placeholder="https://meet.google.com/..."
+            value={meetingLink}
+            onChange={setMeetingLink}
+          />
           <Field
             label="Quotation amount"
             type="number"

@@ -2,6 +2,7 @@ import { Request, Response } from 'express';
 import { contentStore } from '../services/contentStore';
 import { sendSuccess, sendError } from '../utils/apiResponse';
 import { env } from '../config/env';
+import { getAllAppointments } from './appointmentsController';
 
 export const getDashboardStats = async (_req: Request, res: Response): Promise<void> => {
   try {
@@ -11,6 +12,13 @@ export const getDashboardStats = async (_req: Request, res: Response): Promise<v
     const testimonials = contentStore.getTestimonials(true);
     const faqs = contentStore.getFaqs(true);
     const blogPosts = contentStore.getBlogPosts().total;
+
+    const allAppointments = getAllAppointments();
+    const todayStr = new Date().toISOString().slice(0, 10);
+    const confirmedCount = allAppointments.filter((a) => a.status === 'confirmed').length;
+    const todayCount = allAppointments.filter(
+      (a) => a.appointmentDate === todayStr && a.status === 'confirmed',
+    ).length;
 
     sendSuccess(
       res,
@@ -26,9 +34,9 @@ export const getDashboardStats = async (_req: Request, res: Response): Promise<v
             pipelineValue: 0,
           },
           appointments: {
-            total: 0,
-            confirmed: 0,
-            today: 0,
+            total: allAppointments.length,
+            confirmed: confirmedCount,
+            today: todayCount,
           },
           content: {
             projects,
@@ -49,7 +57,7 @@ export const getDashboardStats = async (_req: Request, res: Response): Promise<v
         },
         recentActivity: {
           inquiries: [],
-          appointments: [],
+          appointments: allAppointments.slice(0, 5),
           quotations: [],
         },
       },

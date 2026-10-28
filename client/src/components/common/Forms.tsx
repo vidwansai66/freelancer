@@ -8,6 +8,7 @@ export function Field({
   value,
   onChange,
   type = 'text',
+  placeholder,
   required = false,
   multiline = false,
 }: {
@@ -15,6 +16,7 @@ export function Field({
   value: string | number;
   onChange: (value: string) => void;
   type?: string;
+  placeholder?: string;
   required?: boolean;
   multiline?: boolean;
 }) {
@@ -29,6 +31,7 @@ export function Field({
           id={id}
           value={value}
           onChange={(e) => onChange(e.target.value)}
+          placeholder={placeholder}
           required={required}
           rows={4}
           className={fieldClass}
@@ -39,6 +42,7 @@ export function Field({
           type={type}
           value={value}
           onChange={(e) => onChange(e.target.value)}
+          placeholder={placeholder}
           required={required}
           className={fieldClass}
         />

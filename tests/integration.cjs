@@ -204,3 +204,192 @@ test('Zoho CRM diagnostic status endpoint returns accurate configuration metadat
   assert.equal(typeof res.data.data.isConfigured, 'boolean');
 });
 
+function getTestWeekday(offset = 10) {
+  const d = new Date();
+  d.setDate(d.getDate() + offset + Math.floor(Math.random() * 30));
+  while (d.getUTCDay() === 0 || d.getUTCDay() === 6) {
+    d.setDate(d.getDate() + 1);
+  }
+  return d.toISOString().slice(0, 10);
+}
+
+test('Multiple-call booking preserves separate records independently', async () => {
+  const futureDate = getTestWeekday(10);
+
+  // 1. Create first booking
+  const bookRes1 = await apiRequest('POST', '/api/appointments', {
+    clientName: 'Alice Smith',
+    clientEmail: 'alice.smith@example.com',
+    clientPhone: '+91 99999 11111',
+    serviceType: 'Discovery Consultation',
+    appointmentDate: futureDate,
+    startTime: '10:00',
+    endTime: '10:30',
+    notes: 'First discovery call',
+  });
+  assert.equal(bookRes1.status, 201);
+  const apt1 = bookRes1.data.data;
+  assert.ok(apt1._id || apt1.id);
+  assert.ok(apt1.manageToken);
+
+  // 2. Create second booking for a different slot (same client or another client)
+  const bookRes2 = await apiRequest('POST', '/api/appointments', {
+    clientName: 'Alice Smith',
+    clientEmail: 'alice.smith@example.com',
+    clientPhone: '+91 99999 11111',
+    serviceType: 'Architecture & Technical Review',
+    appointmentDate: futureDate,
+    startTime: '11:00',
+    endTime: '11:30',
+    notes: 'Second technical call',
+  });
+  assert.equal(bookRes2.status, 201);
+  const apt2 = bookRes2.data.data;
+  assert.ok(apt2._id || apt2.id);
+  assert.ok(apt2.manageToken);
+
+  // Verify IDs and tokens are distinct
+  assert.notEqual(apt1._id || apt1.id, apt2._id || apt2.id);
+  assert.notEqual(apt1.manageToken, apt2.manageToken);
+
+  // 3. Login as admin and fetch all appointments
+  const loginRes = await apiRequest('POST', '/api/auth/login', {
+    email: env.DEFAULT_ADMIN_EMAIL,
+    password: env.DEFAULT_ADMIN_PASSWORD,
+  });
+  assert.equal(loginRes.status, 200);
+  const authCookie =
+    loginRes.headers.get('set-cookie')?.split(';')[0] || adminCookie;
+
+  const adminListRes = await apiRequest('GET', `/api/appointments?date=${futureDate}`, null, authCookie);
+  assert.equal(adminListRes.status, 200);
+  const appointments = adminListRes.data.data;
+
+  // Confirm BOTH records exist in admin view
+  const id1 = apt1._id || apt1.id;
+  const id2 = apt2._id || apt2.id;
+  assert.ok(appointments.some((a) => a._id === id1), 'Call 1 should exist in admin appointments');
+  assert.ok(appointments.some((a) => a._id === id2), 'Call 2 should exist in admin appointments');
+
+  // 4. Re-fetch independently to ensure persistence
+  const refetchRes = await apiRequest('GET', `/api/appointments?date=${futureDate}`, null, authCookie);
+  assert.equal(refetchRes.status, 200);
+  assert.ok(refetchRes.data.data.some((a) => a._id === id1));
+  assert.ok(refetchRes.data.data.some((a) => a._id === id2));
+
+  // 5. Verify overlapping booking is rejected with 409 Conflict
+  const conflictRes = await apiRequest('POST', '/api/appointments', {
+    clientName: 'Bob Jones',
+    clientEmail: 'bob.jones@example.com',
+    serviceType: 'Launch Review',
+    appointmentDate: futureDate,
+    startTime: '10:00', // Collides with Alice's first booking
+    endTime: '10:30',
+  });
+  assert.equal(conflictRes.status, 409);
+});
+
+test('Meeting link updates synchronize between admin and client dashboard', async () => {
+  const futureDate = getTestWeekday(50);
+
+  // 1. Client books appointment with initial meeting link
+  const bookRes = await apiRequest('POST', '/api/appointments', {
+    clientName: 'Carlos Rivera',
+    clientEmail: 'carlos.rivera@example.com',
+    serviceType: 'Architecture Review',
+    appointmentDate: futureDate,
+    startTime: '14:00',
+    endTime: '14:30',
+    notes: 'Initial booking',
+  });
+  assert.equal(bookRes.status, 201);
+  const apt = bookRes.data.data;
+  const aptId = apt._id || apt.id;
+  const clientToken = apt.manageToken;
+  assert.ok(clientToken);
+
+  // 2. Admin logs in
+  const loginRes = await apiRequest('POST', '/api/auth/login', {
+    email: env.DEFAULT_ADMIN_EMAIL,
+    password: env.DEFAULT_ADMIN_PASSWORD,
+  });
+  assert.equal(loginRes.status, 200);
+  const authCookie =
+    loginRes.headers.get('set-cookie')?.split(';')[0] || adminCookie;
+
+  // 3. Admin updates the meeting link
+  const updatedMeetingUrl = 'https://meet.google.com/abc-sync-123';
+  const updateRes = await apiRequest(
+    'PUT',
+    `/api/appointments/${aptId}`,
+    {
+      meetingLink: updatedMeetingUrl,
+      notes: 'Updated by studio admin with custom Google Meet room',
+    },
+    authCookie,
+  );
+  assert.equal(updateRes.status, 200);
+  assert.equal(updateRes.data.data.meetingLink, updatedMeetingUrl);
+
+  // 4. Client fetches their booking via public /manage endpoint
+  const clientViewRes = await apiRequest('POST', '/api/appointments/manage', {
+    token: clientToken,
+    action: 'view',
+  });
+  assert.equal(clientViewRes.status, 200);
+  assert.equal(clientViewRes.data.data.meetingLink, updatedMeetingUrl);
+
+  // 5. Client reschedules to another open slot
+  const rescheduleRes = await apiRequest('POST', '/api/appointments/manage', {
+    token: clientToken,
+    action: 'reschedule',
+    appointmentDate: futureDate,
+    startTime: '15:00',
+    endTime: '15:30',
+  });
+  assert.equal(rescheduleRes.status, 200);
+  assert.equal(rescheduleRes.data.data.startTime, '15:00');
+  // Meeting link remains preserved after client reschedule
+  assert.equal(rescheduleRes.data.data.meetingLink, updatedMeetingUrl);
+});
+
+test('Security and validation: unauthorized meeting link edits and invalid formats are rejected', async () => {
+  // 1. Unauthorized PUT request to appointments rejected with 401
+  const unauthRes = await apiRequest('PUT', '/api/appointments/apt-fake-999', {
+    meetingLink: 'https://meet.google.com/hack',
+  });
+  assert.equal(unauthRes.status, 401);
+
+  // 2. Admin login
+  const loginRes = await apiRequest('POST', '/api/auth/login', {
+    email: env.DEFAULT_ADMIN_EMAIL,
+    password: env.DEFAULT_ADMIN_PASSWORD,
+  });
+  assert.equal(loginRes.status, 200);
+  const authCookie =
+    loginRes.headers.get('set-cookie')?.split(';')[0] || adminCookie;
+
+  // 3. Invalid meeting URL rejected with 400
+  const invalidUrlRes = await apiRequest(
+    'PUT',
+    '/api/appointments/apt-sample-01',
+    {
+      meetingLink: 'javascript:alert(1)',
+    },
+    authCookie,
+  );
+  assert.equal(invalidUrlRes.status, 400);
+
+  // 4. Non-existent appointment ID returns 404
+  const notFoundRes = await apiRequest(
+    'PUT',
+    '/api/appointments/apt-non-existent-99999',
+    {
+      status: 'confirmed',
+    },
+    authCookie,
+  );
+  assert.equal(notFoundRes.status, 404);
+});
+
+

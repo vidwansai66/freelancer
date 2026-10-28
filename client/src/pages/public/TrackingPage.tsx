@@ -37,6 +37,24 @@ export function TrackingPage() {
         <section className="rounded-2xl border border-border bg-card p-6 space-y-4">
           <h2 className="text-2xl">{project.title}</h2>
           <p className="capitalize">Status: {project.status.replace('_', ' ')}</p>
+          {project.meetingLink && (
+            <div className="rounded-xl border border-primary/30 bg-primary/10 p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div>
+                <span className="text-[11px] font-bold uppercase tracking-wider text-primary">
+                  Scheduled Project Review
+                </span>
+                <p className="text-xs text-white font-mono truncate">{project.meetingLink}</p>
+              </div>
+              <a
+                href={project.meetingLink}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="rounded-lg bg-primary px-4 py-2 text-xs font-bold text-white hover:bg-primary/90 transition text-center whitespace-nowrap"
+              >
+                Join Video Call
+              </a>
+            </div>
+          )}
           {project.proposal && (
             <div>
               <h3>Quotation · ${project.quoteAmount}</h3>

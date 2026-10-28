@@ -25,7 +25,7 @@ const money = z.number().min(0).max(100000000);
 const time = z.string().regex(/^(?:[01]\d|2[0-3]):[0-5]\d$/);
 const date = z.string().refine(validDate, 'Invalid calendar date');
 const stringList = z.array(text).max(100);
-const token = z.string().regex(/^[a-f0-9]{64}$/);
+const token = z.string().trim().min(8).max(128);
 const fileIdSchema = z.string().regex(/^[a-zA-Z0-9_-]{1,64}$/);
 const oid = fileIdSchema;
 const attachments = z.array(z.object({ fileId: fileIdSchema, token })).max(5);
@@ -184,6 +184,7 @@ const booking = z.object({
   startTime: time,
   endTime: time,
   notes: long.optional(),
+  meetingLink: url.optional(),
   idempotencyKey: text.optional(),
 });
 
@@ -286,6 +287,7 @@ export const apiValidation = (req: Request, res: Response, next: NextFunction) =
         proposal: long.optional(),
         quoteAmount: money.optional(),
         documents: z.array(oid).max(20).optional(),
+        meetingLink: url.optional(),
       });
     if (module === 'chat') {
       if (id === 'session')
