@@ -7,6 +7,7 @@ import { randomUUID } from 'crypto';
 import fs from 'fs';
 import path from 'path';
 import os from 'os';
+import { syncClientToZoho } from '../services/zohoService';
 
 export interface LocalClientProject {
   _id: string;
@@ -19,6 +20,7 @@ export interface LocalClientProject {
   quoteAmount: number;
   status: string;
   meetingLink?: string;
+  zohoLeadId?: string;
   tokenHash: string;
   documents: string[];
   updates: Array<{ text: string; at: string }>;
@@ -136,6 +138,28 @@ router.post('/', async (req, res) => {
   list.unshift(project);
   inMemoryClientProjects = list;
   persistClientProjects();
+
+  // Trigger server-side Zoho CRM synchronization asynchronously/safely
+  if (clientEmail && clientName) {
+    syncClientToZoho({
+      name: clientName,
+      email: clientEmail,
+      company: title || `${clientName} (Client)`,
+      source: 'Client Registration',
+      title: title || 'Website Project',
+      quoteAmount: Number(quoteAmount) || 0,
+      notes: proposal || `Client registered for ${title || 'Website Project'}. Tracking code generated.`,
+    })
+      .then((syncRes) => {
+        if (syncRes.success && syncRes.leadId) {
+          project.zohoLeadId = syncRes.leadId;
+          persistClientProjects();
+        }
+      })
+      .catch((err) => {
+        console.warn('[Zoho CRM] Deferred client registration sync warning:', err.message);
+      });
+  }
 
   sendSuccess(res, { project, token }, 'Client project tracking created.', 201);
 });

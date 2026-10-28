@@ -392,4 +392,67 @@ test('Security and validation: unauthorized meeting link edits and invalid forma
   assert.equal(notFoundRes.status, 404);
 });
 
+test('Zoho CRM client registration triggers server sync and succeeds with 201', async () => {
+  // 1. Admin login
+  const loginRes = await apiRequest('POST', '/api/auth/login', {
+    email: env.DEFAULT_ADMIN_EMAIL,
+    password: env.DEFAULT_ADMIN_PASSWORD,
+  });
+  assert.equal(loginRes.status, 200);
+  const authCookie = loginRes.headers.get('set-cookie')?.split(';')[0];
+
+  // 2. Admin creates a new client project record (which triggers server-side syncClientToZoho)
+  const clientRes = await apiRequest(
+    'POST',
+    '/api/client-projects',
+    {
+      clientName: 'Vikram Joshi',
+      clientEmail: 'vikram.joshi@example.com',
+      title: 'Real Estate Platform',
+      quoteAmount: 75000,
+      proposal: 'Full custom responsive real estate showcase website.',
+      meetingLink: 'https://meet.google.com/vik-real-est',
+    },
+    authCookie,
+  );
+
+  assert.equal(clientRes.status, 201);
+  assert.equal(clientRes.data.data.project.clientName, 'Vikram Joshi');
+  assert.equal(clientRes.data.data.project.clientEmail, 'vikram.joshi@example.com');
+  assert.ok(clientRes.data.data.token);
+});
+
+test('Zoho CRM OAuth callback does not expose refresh tokens or credentials in webpage', async () => {
+  // Callback with error parameter renders user-friendly error without leaking sensitive tokens
+  const callbackRes = await apiRequest('GET', '/api/zoho/callback?error=access_denied');
+  assert.equal(callbackRes.status, 400);
+  const bodyText = typeof callbackRes.data === 'string' ? callbackRes.data : callbackRes.data.raw || '';
+  assert.ok(!bodyText.includes('ZOHO_REFRESH_TOKEN=1000.'));
+  assert.ok(!bodyText.includes('client_secret'));
+});
+
+test('Zoho CRM admin diagnostic endpoint is protected and responds with structured status', async () => {
+  // 1. Unauthenticated request to /api/zoho/test is rejected with 401
+  const unauthRes = await apiRequest('POST', '/api/zoho/test', {});
+  assert.equal(unauthRes.status, 401);
+
+  // 2. Authenticated admin request runs diagnostic
+  const loginRes = await apiRequest('POST', '/api/auth/login', {
+    email: env.DEFAULT_ADMIN_EMAIL,
+    password: env.DEFAULT_ADMIN_PASSWORD,
+  });
+  const authCookie = loginRes.headers.get('set-cookie')?.split(';')[0];
+
+  const diagRes = await apiRequest('POST', '/api/zoho/test', { createTestLead: false }, authCookie);
+  // Status is 200 (if Zoho authorized) or 502 (if Zoho unconfigured/offline), but never crashes or returns 500
+  assert.ok([200, 502].includes(diagRes.status));
+  assert.ok(typeof diagRes.data === 'object');
+
+  // 3. Pending sync queue endpoint
+  const pendingRes = await apiRequest('GET', '/api/zoho/pending', null, authCookie);
+  assert.equal(pendingRes.status, 200);
+  assert.ok(typeof pendingRes.data.data.count === 'number');
+});
+
+
 

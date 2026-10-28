@@ -2,6 +2,7 @@ import { Request, Response } from 'express';
 import { sendSuccess, sendError } from '../utils/apiResponse';
 import { answerStudioQuestion } from '../services/chatAssistant';
 import { studioSettingsData } from '../data/content';
+import { syncClientToZoho } from '../services/zohoService';
 
 interface ChatMessage {
   sender: 'client' | 'admin';
@@ -54,6 +55,16 @@ export const initOrGetSession = async (req: Request, res: Response): Promise<voi
     } else {
       if (clientName) session.clientName = clientName.trim();
       if (clientEmail) session.clientEmail = clientEmail.toLowerCase().trim();
+    }
+
+    if (clientEmail && clientName && clientName.trim() !== 'Website Guest') {
+      syncClientToZoho({
+        name: clientName,
+        email: clientEmail,
+        source: 'Website Live Chat',
+        title: 'Live Chat Consultation',
+        notes: `Client started a live chat session (Session: ${sessionId}).`,
+      }).catch((err) => console.warn('[Zoho CRM] Deferred chat lead sync:', err.message));
     }
 
     sendSuccess(res, session, 'Chat session active.');

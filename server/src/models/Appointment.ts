@@ -10,6 +10,7 @@ export interface IAppointment {
   status: 'pending' | 'confirmed' | 'cancelled' | 'completed';
   meetingLink?: string;
   notes?: string;
+  zohoLeadId?: string;
   manageToken: string;
   manageTokenHash?: string;
   timeZone?: string;

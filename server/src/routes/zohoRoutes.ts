@@ -19,6 +19,9 @@ import {
   getActiveRefreshToken,
   setInMemoryRefreshToken,
   getValidAccessToken,
+  runZohoDiagnostic,
+  getPendingZohoSyncs,
+  processPendingZohoSyncs,
 } from '../services/zohoService';
 import { env } from '../config/env';
 import { sendSuccess, sendError } from '../utils/apiResponse';
@@ -192,7 +195,7 @@ router.get('/callback', async (req: Request, res: Response) => {
   // Retain token in active server memory
   setInMemoryRefreshToken(tokenResult.refreshToken);
 
-  // Render emerald-styled success page displaying the refresh token for easy persistent copying
+  // Render secure success confirmation without exposing any secret tokens or credentials
   res.send(`
     <!DOCTYPE html>
     <html lang="en">
@@ -217,9 +220,10 @@ router.get('/callback', async (req: Request, res: Response) => {
           border: 1px solid #10b981;
           border-radius: 16px;
           padding: 36px;
-          max-width: 600px;
+          max-width: 520px;
           width: 100%;
           box-shadow: 0 25px 50px -12px rgba(16, 185, 129, 0.15);
+          text-align: center;
         }
         .badge {
           display: inline-block;
@@ -232,7 +236,7 @@ router.get('/callback', async (req: Request, res: Response) => {
           margin-bottom: 16px;
         }
         h1 {
-          font-size: 24px;
+          font-size: 22px;
           margin: 0 0 12px 0;
           color: #ffffff;
         }
@@ -241,104 +245,57 @@ router.get('/callback', async (req: Request, res: Response) => {
           font-size: 14px;
           line-height: 1.6;
         }
-        .token-box {
-          background: #09090b;
-          border: 1px solid #27272a;
+        .secure-note {
+          background: rgba(16, 185, 129, 0.08);
+          border: 1px solid rgba(16, 185, 129, 0.3);
           border-radius: 8px;
           padding: 14px;
           margin: 20px 0;
-          position: relative;
-        }
-        .token-label {
-          font-size: 11px;
-          text-transform: uppercase;
-          color: #71717a;
-          letter-spacing: 0.05em;
-          margin-bottom: 6px;
-        }
-        .token-val {
-          font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+          font-size: 13px;
           color: #34d399;
-          word-break: break-all;
-          font-size: 13px;
-          user-select: all;
-        }
-        .copy-btn {
-          margin-top: 10px;
-          background: #10b981;
-          color: #09090b;
-          border: none;
-          padding: 8px 16px;
-          border-radius: 6px;
-          font-weight: 600;
-          cursor: pointer;
-          font-size: 13px;
-          transition: background 0.2s;
-        }
-        .copy-btn:hover {
-          background: #059669;
-        }
-        .steps {
-          background: rgba(39, 39, 42, 0.5);
-          border-radius: 8px;
-          padding: 16px;
-          font-size: 13px;
-          margin-top: 20px;
-        }
-        .steps ol {
-          margin: 8px 0 0 0;
-          padding-left: 20px;
-          color: #d4d4d8;
-        }
-        .steps li {
-          margin-bottom: 6px;
+          line-height: 1.5;
         }
         .actions {
-          margin-top: 28px;
+          margin-top: 24px;
           display: flex;
+          justify-content: center;
           gap: 12px;
         }
         .action-link {
           display: inline-block;
-          background: #27272a;
-          color: #f4f4f5;
+          background: #10b981;
+          color: #09090b;
           text-decoration: none;
           padding: 10px 20px;
           border-radius: 8px;
           font-size: 14px;
-          font-weight: 500;
+          font-weight: 600;
+          transition: background 0.2s;
         }
         .action-link:hover {
+          background: #059669;
+        }
+        .action-link.secondary {
+          background: #27272a;
+          color: #f4f4f5;
+        }
+        .action-link.secondary:hover {
           background: #3f3f46;
         }
       </style>
     </head>
     <body>
       <div class="card">
-        <div class="badge">Connected to Zoho India DC</div>
-        <h1>Zoho CRM Authorization Successful</h1>
-        <p>Your website is now authenticated to communicate with Zoho CRM! The integration is currently active in memory for this session.</p>
-
-        <div class="token-box">
-          <div class="token-label">Permanent Refresh Token (ZOHO_REFRESH_TOKEN)</div>
-          <div class="token-val" id="refreshToken">${tokenResult.refreshToken}</div>
-          <button class="copy-btn" onclick="navigator.clipboard.writeText(document.getElementById('refreshToken').innerText); this.innerText = 'Copied!';">Copy Refresh Token</button>
+        <div class="badge">Connected &bull; India DC</div>
+        <h1>Zoho CRM Authorized Successfully</h1>
+        <p>Your studio website has established secure OAuth communication with Zoho CRM. Authorization credentials are active and securely managed on the server.</p>
+        <div class="secure-note">
+          &check; All authentication tokens and secrets are protected on the server.<br>
+          Client registrations, consultations, inquiries, and quotations will now synchronize to Zoho CRM Leads.
         </div>
-
-        <div class="steps">
-          <strong>To persist across server restarts &amp; Vercel deployments:</strong>
-          <ol>
-            <li>Copy the Refresh Token above.</li>
-            <li>Paste it into your local <code>server/.env</code>:
-              <br><code style="color:#34d399">ZOHO_REFRESH_TOKEN=${tokenResult.refreshToken}</code>
-            </li>
-            <li>Add <code>ZOHO_REFRESH_TOKEN</code> to your Vercel Project Environment Variables.</li>
-          </ol>
-        </div>
-
         <div class="actions">
-          <a class="action-link" href="/admin/dashboard">Go to Admin Dashboard</a>
-          <a class="action-link" href="/contact">Test Contact Form</a>
+          <a class="action-link" href="/admin/dashboard">Go to Dashboard</a>
+          <a class="action-link secondary" href="/contact">Test Contact Form</a>
         </div>
       </div>
     </body>
@@ -347,19 +304,60 @@ router.get('/callback', async (req: Request, res: Response) => {
 });
 
 /**
- * POST /api/zoho/test
- * Protected test endpoint to verify access token acquisition
+ * GET /api/zoho/pending
+ * Admin endpoint to check deferred / retry sync queue size
  */
-router.post('/test', authenticateAdmin, async (req: Request, res: Response) => {
+router.get('/pending', authenticateAdmin, async (_req: Request, res: Response) => {
+  const syncs = getPendingZohoSyncs();
+  sendSuccess(res, {
+    count: syncs.length,
+    pending: syncs.map((s) => ({
+      id: s.id,
+      type: s.type,
+      createdAt: s.createdAt,
+      attempts: s.attempts,
+      lastError: s.lastError,
+    })),
+  }, 'Pending sync queue retrieved.');
+});
+
+/**
+ * POST /api/zoho/process-queue
+ * Admin endpoint to manually trigger flush of pending syncs
+ */
+router.post('/process-queue', authenticateAdmin, async (_req: Request, res: Response) => {
   try {
-    const token = await getValidAccessToken();
-    sendSuccess(res, {
-      message: 'Successfully acquired valid Zoho Access Token',
-      tokenPreview: `${token.slice(0, 10)}...${token.slice(-4)}`,
-    });
+    const result = await processPendingZohoSyncs();
+    sendSuccess(res, result, `Processed ${result.processed} items (${result.succeeded} succeeded, ${result.failed} failed).`);
   } catch (err: any) {
-    sendError(res, `Failed to acquire Zoho token: ${err.message}`, 502);
+    sendError(res, `Failed to process queue: ${err.message}`, 500);
   }
 });
+
+/**
+ * POST /api/zoho/test (and /api/zoho/diagnostic)
+ * Protected admin diagnostic endpoint that:
+ * 1. Verifies OAuth token refresh against Zoho accounts endpoint
+ * 2. Verifies Zoho CRM API endpoint read permissions
+ * 3. Optionally creates a clearly identified test Lead without modifying/deleting real records
+ * 4. Verifies the returned record ID
+ * 5. Flushes pending sync queue
+ */
+const handleDiagnostic = async (req: Request, res: Response) => {
+  try {
+    const createTestLead = Boolean(req.body?.createTestLead);
+    const diagnostic = await runZohoDiagnostic({ createTestLead });
+    if (diagnostic.success) {
+      sendSuccess(res, diagnostic, diagnostic.message);
+    } else {
+      sendError(res, diagnostic.message, 502);
+    }
+  } catch (err: any) {
+    sendError(res, `Zoho diagnostic failed: ${err.message}`, 502);
+  }
+};
+
+router.post('/test', authenticateAdmin, handleDiagnostic);
+router.post('/diagnostic', authenticateAdmin, handleDiagnostic);
 
 export default router;

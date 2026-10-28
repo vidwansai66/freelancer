@@ -54,26 +54,25 @@ export const submitInquiry = async (req: Request, res: Response): Promise<void> 
       createdAt: new Date().toISOString(),
     };
 
-    // 1. If Zoho CRM is configured and authorized, sync lead to Zoho CRM
-    if (isZohoConfigured() && hasZohoAuthorization()) {
-      const zohoResult = await syncInquiryToZoho(req.body);
-      if (!zohoResult.success) {
-        // Return 502 with diagnostic details and direct WhatsApp fallback
-        sendError(
-          res,
-          `Zoho CRM sync failed: ${zohoResult.error}. Please contact directly via WhatsApp: +91 94909 55048.`,
-          502,
-        );
-        return;
+    inMemoryInquiries.unshift(inquiryRecord);
+
+    // 1. If Zoho CRM is configured, sync lead or queue for background retry
+    if (isZohoConfigured()) {
+      try {
+        const zohoResult = await syncInquiryToZoho(req.body);
+        if (zohoResult.success && zohoResult.leadId) {
+          inquiryRecord.zohoLeadId = zohoResult.leadId;
+        } else {
+          console.warn('[Zoho CRM] Inquiry sync deferred/failed:', zohoResult.error);
+        }
+      } catch (err: any) {
+        console.warn('[Zoho CRM] Inquiry sync exception:', err.message);
       }
-      inquiryRecord.zohoLeadId = zohoResult.leadId;
     } else {
       console.warn(
-        '[Zoho CRM] Notice: Zoho CRM credentials not fully configured or authorization pending. Inquiry saved to local session. Visit /api/zoho/auth to authorize.',
+        '[Zoho CRM] Notice: Zoho CRM credentials not configured. Inquiry saved locally. Visit /api/zoho/auth to authorize.',
       );
     }
-
-    inMemoryInquiries.unshift(inquiryRecord);
 
     // 2. Send optional email notifications if SMTP is enabled
     if (env.EMAIL_SERVICE_ENABLED) {

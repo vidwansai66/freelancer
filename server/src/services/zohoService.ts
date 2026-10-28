@@ -12,6 +12,9 @@
 import https from 'https';
 import { URL } from 'url';
 import crypto from 'crypto';
+import fs from 'fs';
+import path from 'path';
+import os from 'os';
 import { env } from '../config/env';
 
 export interface ZohoSyncResult {
@@ -50,6 +53,38 @@ export interface QuotationFormPayload {
   attachments?: Array<{ fileId: string; token?: string }> | string[];
 }
 
+export interface ClientSyncPayload {
+  name: string;
+  email: string;
+  phone?: string;
+  company?: string;
+  source?: string;
+  title?: string;
+  notes?: string;
+  quoteAmount?: number;
+}
+
+export interface AppointmentSyncPayload {
+  clientName: string;
+  clientEmail: string;
+  clientPhone?: string;
+  serviceType?: string;
+  appointmentDate: string;
+  startTime: string;
+  endTime?: string;
+  meetingLink?: string;
+  notes?: string;
+}
+
+export interface PendingZohoSync {
+  id: string;
+  type: 'client' | 'appointment' | 'inquiry' | 'quotation';
+  payload: any;
+  createdAt: string;
+  attempts: number;
+  lastError?: string;
+}
+
 // In-memory token state
 interface TokenState {
   accessToken: string;
@@ -63,6 +98,61 @@ let tokenState: TokenState = {
   refreshToken: '',
   expiresAt: 0,
 };
+
+// Persistent pending sync queue file
+const PENDING_SYNCS_FILE = path.join(os.tmpdir(), 'wp_zoho_pending_syncs.json');
+let inMemoryPendingSyncs: PendingZohoSync[] = [];
+
+export function getPendingZohoSyncs(): PendingZohoSync[] {
+  if (inMemoryPendingSyncs.length > 0) return inMemoryPendingSyncs;
+  try {
+    if (fs.existsSync(PENDING_SYNCS_FILE)) {
+      const data = fs.readFileSync(PENDING_SYNCS_FILE, 'utf-8');
+      inMemoryPendingSyncs = JSON.parse(data);
+      if (Array.isArray(inMemoryPendingSyncs)) return inMemoryPendingSyncs;
+    }
+  } catch {
+    // Ignore read errors
+  }
+  inMemoryPendingSyncs = [];
+  return inMemoryPendingSyncs;
+}
+
+export function persistPendingZohoSyncs(): void {
+  try {
+    fs.writeFileSync(PENDING_SYNCS_FILE, JSON.stringify(inMemoryPendingSyncs, null, 2), 'utf-8');
+  } catch {
+    // Ignore write errors
+  }
+}
+
+export function queuePendingZohoSync(
+  type: 'client' | 'appointment' | 'inquiry' | 'quotation',
+  payload: any,
+  lastError?: string,
+): void {
+  const syncs = getPendingZohoSyncs();
+  const email = (payload.email || payload.clientEmail || '').toLowerCase().trim();
+  const existing = syncs.find(
+    (s) => s.type === type && (s.payload.email || s.payload.clientEmail || '').toLowerCase().trim() === email,
+  );
+  if (existing) {
+    existing.payload = { ...existing.payload, ...payload };
+    existing.attempts += 1;
+    existing.lastError = lastError;
+  } else {
+    syncs.push({
+      id: `sync-${crypto.randomUUID().slice(0, 8)}`,
+      type,
+      payload,
+      createdAt: new Date().toISOString(),
+      attempts: 1,
+      lastError,
+    });
+  }
+  inMemoryPendingSyncs = syncs;
+  persistPendingZohoSyncs();
+}
 
 // OAuth state store for CSRF protection (valid for 10 minutes)
 const oauthStates = new Map<string, number>();
@@ -497,8 +587,12 @@ function splitName(fullName: string): { firstName: string; lastName: string } {
 /**
  * Process a Contact Form submission and sync to Zoho CRM Leads
  */
-export async function syncInquiryToZoho(payload: ContactFormPayload): Promise<ZohoSyncResult> {
+export async function syncInquiryToZoho(
+  payload: ContactFormPayload,
+  shouldQueueOnFailure: boolean = true,
+): Promise<ZohoSyncResult> {
   if (!isZohoConfigured()) {
+    if (shouldQueueOnFailure) queuePendingZohoSync('inquiry', payload, 'Zoho CRM credentials not configured');
     return {
       success: false,
       error: 'Zoho CRM is not configured. Set ZOHO_CLIENT_ID and ZOHO_CLIENT_SECRET in server/.env.',
@@ -506,6 +600,7 @@ export async function syncInquiryToZoho(payload: ContactFormPayload): Promise<Zo
   }
 
   if (!hasZohoAuthorization()) {
+    if (shouldQueueOnFailure) queuePendingZohoSync('inquiry', payload, 'Zoho CRM authorization pending');
     return {
       success: false,
       error: 'Zoho CRM is not authorized. Visit /api/zoho/auth or set ZOHO_REFRESH_TOKEN in server/.env.',
@@ -557,6 +652,7 @@ export async function syncInquiryToZoho(payload: ContactFormPayload): Promise<Zo
 
       if (createRes.status !== 201 && createRes.status !== 200) {
         const errDetails = createRes.data?.data?.[0]?.message || createRes.data?.message || `HTTP ${createRes.status}`;
+        if (shouldQueueOnFailure) queuePendingZohoSync('inquiry', payload, `Lead creation rejected: ${errDetails}`);
         return {
           success: false,
           error: `Zoho CRM lead creation rejected: ${errDetails}`,
@@ -566,9 +662,11 @@ export async function syncInquiryToZoho(payload: ContactFormPayload): Promise<Zo
 
       const recordResult = createRes.data?.data?.[0];
       if (recordResult?.code !== 'SUCCESS') {
+        const errMsg = recordResult?.message || 'Unknown response';
+        if (shouldQueueOnFailure) queuePendingZohoSync('inquiry', payload, errMsg);
         return {
           success: false,
-          error: `Zoho CRM error: ${recordResult?.message || 'Unknown response'}`,
+          error: `Zoho CRM error: ${errMsg}`,
         };
       }
 
@@ -603,6 +701,7 @@ export async function syncInquiryToZoho(payload: ContactFormPayload): Promise<Zo
         : 'New lead successfully created in Zoho CRM.',
     };
   } catch (err: any) {
+    if (shouldQueueOnFailure) queuePendingZohoSync('inquiry', payload, err.message);
     return {
       success: false,
       error: `Zoho CRM communication failure: ${err.message}`,
@@ -613,8 +712,12 @@ export async function syncInquiryToZoho(payload: ContactFormPayload): Promise<Zo
 /**
  * Process a Quotation Request submission and sync to Zoho CRM Leads
  */
-export async function syncQuotationToZoho(payload: QuotationFormPayload): Promise<ZohoSyncResult> {
+export async function syncQuotationToZoho(
+  payload: QuotationFormPayload,
+  shouldQueueOnFailure: boolean = true,
+): Promise<ZohoSyncResult> {
   if (!isZohoConfigured()) {
+    if (shouldQueueOnFailure) queuePendingZohoSync('quotation', payload, 'Zoho CRM credentials not configured');
     return {
       success: false,
       error: 'Zoho CRM is not configured. Set ZOHO_CLIENT_ID and ZOHO_CLIENT_SECRET in server/.env.',
@@ -622,6 +725,7 @@ export async function syncQuotationToZoho(payload: QuotationFormPayload): Promis
   }
 
   if (!hasZohoAuthorization()) {
+    if (shouldQueueOnFailure) queuePendingZohoSync('quotation', payload, 'Zoho CRM authorization pending');
     return {
       success: false,
       error: 'Zoho CRM is not authorized. Visit /api/zoho/auth or set ZOHO_REFRESH_TOKEN in server/.env.',
@@ -674,6 +778,7 @@ export async function syncQuotationToZoho(payload: QuotationFormPayload): Promis
 
       if (createRes.status !== 201 && createRes.status !== 200) {
         const errDetails = createRes.data?.data?.[0]?.message || createRes.data?.message || `HTTP ${createRes.status}`;
+        if (shouldQueueOnFailure) queuePendingZohoSync('quotation', payload, `Lead creation rejected: ${errDetails}`);
         return {
           success: false,
           error: `Zoho CRM quotation lead creation rejected: ${errDetails}`,
@@ -683,9 +788,11 @@ export async function syncQuotationToZoho(payload: QuotationFormPayload): Promis
 
       const recordResult = createRes.data?.data?.[0];
       if (recordResult?.code !== 'SUCCESS') {
+        const errMsg = recordResult?.message || 'Unknown response';
+        if (shouldQueueOnFailure) queuePendingZohoSync('quotation', payload, errMsg);
         return {
           success: false,
-          error: `Zoho CRM error: ${recordResult?.message || 'Unknown response'}`,
+          error: `Zoho CRM error: ${errMsg}`,
         };
       }
 
@@ -726,9 +833,447 @@ export async function syncQuotationToZoho(payload: QuotationFormPayload): Promis
         : 'Quotation lead successfully created in Zoho CRM.',
     };
   } catch (err: any) {
+    if (shouldQueueOnFailure) queuePendingZohoSync('quotation', payload, err.message);
     return {
       success: false,
       error: `Zoho CRM quotation communication failure: ${err.message}`,
     };
   }
 }
+
+/**
+ * Synchronize a registered or created client to Zoho CRM Leads.
+ * Uses Zoho CRM Leads module with Last_Name, First_Name, Email, Phone, Company, Lead_Source.
+ * Safely deduplicates by searching for existing records with the same email.
+ */
+export async function syncClientToZoho(
+  payload: ClientSyncPayload,
+  shouldQueueOnFailure: boolean = true,
+): Promise<ZohoSyncResult> {
+  if (!isZohoConfigured()) {
+    if (shouldQueueOnFailure) queuePendingZohoSync('client', payload, 'Zoho CRM credentials not configured');
+    return {
+      success: false,
+      error: 'Zoho CRM is not configured. Set ZOHO_CLIENT_ID and ZOHO_CLIENT_SECRET in server/.env.',
+    };
+  }
+
+  if (!hasZohoAuthorization()) {
+    if (shouldQueueOnFailure) queuePendingZohoSync('client', payload, 'Zoho CRM authorization pending');
+    return {
+      success: false,
+      error: 'Zoho CRM is not authorized. Visit /api/zoho/auth or set ZOHO_REFRESH_TOKEN in server/.env.',
+    };
+  }
+
+  const cleanEmail = payload.email.toLowerCase().trim();
+  const { firstName, lastName } = splitName(payload.name);
+  const companyName = payload.company || (payload.title ? `${payload.name} (${payload.title})` : `${payload.name} (Client)`);
+
+  try {
+    const existingLeadId = await searchLeadByEmail(cleanEmail);
+    let leadId = existingLeadId;
+    let isExisting = Boolean(existingLeadId);
+
+    const description = [
+      `[Client Registration]`,
+      `Project / Title: ${payload.title || 'Website Project'}`,
+      payload.quoteAmount ? `Quote / Budget: ₹${payload.quoteAmount.toLocaleString('en-IN')}` : '',
+      payload.notes ? `Notes / Scope: ${payload.notes}` : '',
+      `Registered At: ${new Date().toISOString()}`,
+    ].filter(Boolean).join('\n');
+
+    const leadData: Record<string, any> = {
+      Last_Name: lastName,
+      Email: cleanEmail,
+      Phone: payload.phone || undefined,
+      Company: companyName,
+      Lead_Source: payload.source || 'Client Registration',
+      Description: description,
+    };
+    if (firstName) {
+      leadData.First_Name = firstName;
+    }
+
+    if (existingLeadId) {
+      const updateRes = await zohoApiRequest(`/Leads/${existingLeadId}`, {
+        method: 'PUT',
+        body: { data: [leadData] },
+      });
+      if (updateRes.status !== 200) {
+        console.warn('[Zoho CRM] Update lead warning:', JSON.stringify(updateRes.data));
+      }
+    } else {
+      const createRes = await zohoApiRequest('/Leads', {
+        method: 'POST',
+        body: {
+          data: [leadData],
+          trigger: ['workflow', 'approval'],
+        },
+      });
+
+      if (createRes.status !== 201 && createRes.status !== 200) {
+        const errDetails = createRes.data?.data?.[0]?.message || createRes.data?.message || `HTTP ${createRes.status}`;
+        if (shouldQueueOnFailure) queuePendingZohoSync('client', payload, `Lead creation rejected: ${errDetails}`);
+        return {
+          success: false,
+          error: `Zoho CRM lead creation rejected: ${errDetails}`,
+          statusCode: createRes.status,
+        };
+      }
+
+      const recordResult = createRes.data?.data?.[0];
+      if (recordResult?.code !== 'SUCCESS') {
+        const errMsg = recordResult?.message || 'Unknown response';
+        if (shouldQueueOnFailure) queuePendingZohoSync('client', payload, errMsg);
+        return {
+          success: false,
+          error: `Zoho CRM error: ${errMsg}`,
+        };
+      }
+
+      leadId = recordResult.details?.id;
+    }
+
+    // Attach Note with registration details
+    let noteId: string | undefined;
+    if (leadId) {
+      const noteContent = [
+        `=== Client Registration & Project Overview ===`,
+        `Client Name: ${payload.name}`,
+        `Email: ${cleanEmail}`,
+        `Phone: ${payload.phone || 'N/A'}`,
+        `Project Title: ${payload.title || 'Website Project'}`,
+        payload.quoteAmount ? `Quote Amount: ₹${payload.quoteAmount.toLocaleString('en-IN')}` : '',
+        `Source: ${payload.source || 'Client Registration'}`,
+        `Created: ${new Date().toISOString()}`,
+        `----------------------------------------`,
+        `Details:`,
+        payload.notes || 'Client profile registered in system.',
+      ].filter(Boolean).join('\n');
+
+      noteId = await attachZohoNote(leadId, `Client Registration: ${payload.title || payload.name}`, noteContent);
+    }
+
+    return {
+      success: true,
+      leadId: leadId || undefined,
+      noteId,
+      isExisting,
+      message: isExisting
+        ? 'Existing Zoho CRM lead updated with new client details.'
+        : 'New lead successfully created in Zoho CRM.',
+    };
+  } catch (err: any) {
+    if (shouldQueueOnFailure) queuePendingZohoSync('client', payload, err.message);
+    return {
+      success: false,
+      error: `Zoho CRM client communication failure: ${err.message}`,
+    };
+  }
+}
+
+/**
+ * Synchronize a booked consultation appointment to Zoho CRM Leads.
+ * Saves client's name, email, phone, appointment date/time, and meeting link.
+ * Updates existing lead if client already exists.
+ */
+export async function syncAppointmentToZoho(
+  payload: AppointmentSyncPayload,
+  shouldQueueOnFailure: boolean = true,
+): Promise<ZohoSyncResult> {
+  if (!isZohoConfigured()) {
+    if (shouldQueueOnFailure) queuePendingZohoSync('appointment', payload, 'Zoho CRM credentials not configured');
+    return {
+      success: false,
+      error: 'Zoho CRM is not configured. Set ZOHO_CLIENT_ID and ZOHO_CLIENT_SECRET in server/.env.',
+    };
+  }
+
+  if (!hasZohoAuthorization()) {
+    if (shouldQueueOnFailure) queuePendingZohoSync('appointment', payload, 'Zoho CRM authorization pending');
+    return {
+      success: false,
+      error: 'Zoho CRM is not authorized. Visit /api/zoho/auth or set ZOHO_REFRESH_TOKEN in server/.env.',
+    };
+  }
+
+  const cleanEmail = payload.clientEmail.toLowerCase().trim();
+  const { firstName, lastName } = splitName(payload.clientName);
+  const companyName = `${payload.clientName} (Consultation)`;
+
+  try {
+    const existingLeadId = await searchLeadByEmail(cleanEmail);
+    let leadId = existingLeadId;
+    let isExisting = Boolean(existingLeadId);
+
+    const description = [
+      `[Consultation Booking]`,
+      `Service: ${payload.serviceType || 'General Consultation'}`,
+      `Date & Time: ${payload.appointmentDate} at ${payload.startTime}${payload.endTime ? ` - ${payload.endTime}` : ''}`,
+      payload.meetingLink ? `Meeting Link: ${payload.meetingLink}` : '',
+      payload.notes ? `Notes: ${payload.notes}` : '',
+      `Booked At: ${new Date().toISOString()}`,
+    ].filter(Boolean).join('\n');
+
+    const leadData: Record<string, any> = {
+      Last_Name: lastName,
+      Email: cleanEmail,
+      Phone: payload.clientPhone || undefined,
+      Company: companyName,
+      Lead_Source: 'Website Booking',
+      Description: description,
+    };
+    if (firstName) {
+      leadData.First_Name = firstName;
+    }
+
+    if (existingLeadId) {
+      const updateRes = await zohoApiRequest(`/Leads/${existingLeadId}`, {
+        method: 'PUT',
+        body: { data: [leadData] },
+      });
+      if (updateRes.status !== 200) {
+        console.warn('[Zoho CRM] Update lead warning:', JSON.stringify(updateRes.data));
+      }
+    } else {
+      const createRes = await zohoApiRequest('/Leads', {
+        method: 'POST',
+        body: {
+          data: [leadData],
+          trigger: ['workflow', 'approval'],
+        },
+      });
+
+      if (createRes.status !== 201 && createRes.status !== 200) {
+        const errDetails = createRes.data?.data?.[0]?.message || createRes.data?.message || `HTTP ${createRes.status}`;
+        if (shouldQueueOnFailure) queuePendingZohoSync('appointment', payload, `Lead creation rejected: ${errDetails}`);
+        return {
+          success: false,
+          error: `Zoho CRM consultation lead creation rejected: ${errDetails}`,
+          statusCode: createRes.status,
+        };
+      }
+
+      const recordResult = createRes.data?.data?.[0];
+      if (recordResult?.code !== 'SUCCESS') {
+        const errMsg = recordResult?.message || 'Unknown response';
+        if (shouldQueueOnFailure) queuePendingZohoSync('appointment', payload, errMsg);
+        return {
+          success: false,
+          error: `Zoho CRM error: ${errMsg}`,
+        };
+      }
+
+      leadId = recordResult.details?.id;
+    }
+
+    // Attach Note with consultation details
+    let noteId: string | undefined;
+    if (leadId) {
+      const noteContent = [
+        `=== Consultation Booking Details ===`,
+        `Client Name: ${payload.clientName}`,
+        `Email: ${cleanEmail}`,
+        `Phone: ${payload.clientPhone || 'N/A'}`,
+        `Service: ${payload.serviceType || 'General Consultation'}`,
+        `Scheduled Date: ${payload.appointmentDate}`,
+        `Time: ${payload.startTime}${payload.endTime ? ` to ${payload.endTime}` : ''}`,
+        `Meeting Link: ${payload.meetingLink || 'Scheduled online'}`,
+        `----------------------------------------`,
+        `Client Notes:`,
+        payload.notes || 'No extra notes provided by client.',
+      ].join('\n');
+
+      noteId = await attachZohoNote(leadId, `Consultation: ${payload.serviceType} (${payload.appointmentDate})`, noteContent);
+    }
+
+    return {
+      success: true,
+      leadId: leadId || undefined,
+      noteId,
+      isExisting,
+      message: isExisting
+        ? 'Existing Zoho CRM lead updated with new consultation booking.'
+        : 'Consultation lead successfully created in Zoho CRM.',
+    };
+  } catch (err: any) {
+    if (shouldQueueOnFailure) queuePendingZohoSync('appointment', payload, err.message);
+    return {
+      success: false,
+      error: `Zoho CRM consultation communication failure: ${err.message}`,
+    };
+  }
+}
+
+/**
+ * Drain and retry pending synchronization items from the recovery queue.
+ */
+export async function processPendingZohoSyncs(): Promise<{
+  processed: number;
+  succeeded: number;
+  failed: number;
+}> {
+  if (!isZohoConfigured() || !hasZohoAuthorization()) {
+    return { processed: 0, succeeded: 0, failed: 0 };
+  }
+
+  const syncs = getPendingZohoSyncs();
+  if (syncs.length === 0) {
+    return { processed: 0, succeeded: 0, failed: 0 };
+  }
+
+  let succeeded = 0;
+  let failed = 0;
+  const remaining: PendingZohoSync[] = [];
+
+  for (const item of syncs) {
+    try {
+      let result: ZohoSyncResult;
+      if (item.type === 'client') {
+        result = await syncClientToZoho(item.payload, false);
+      } else if (item.type === 'appointment') {
+        result = await syncAppointmentToZoho(item.payload, false);
+      } else if (item.type === 'inquiry') {
+        result = await syncInquiryToZoho(item.payload, false);
+      } else if (item.type === 'quotation') {
+        result = await syncQuotationToZoho(item.payload, false);
+      } else {
+        result = { success: false, error: 'Unknown sync type' };
+      }
+
+      if (result.success) {
+        succeeded++;
+      } else {
+        item.attempts += 1;
+        item.lastError = result.error;
+        if (item.attempts < 5) {
+          remaining.push(item);
+        }
+        failed++;
+      }
+    } catch (err: any) {
+      item.attempts += 1;
+      item.lastError = err.message;
+      if (item.attempts < 5) {
+        remaining.push(item);
+      }
+      failed++;
+    }
+  }
+
+  inMemoryPendingSyncs = remaining;
+  persistPendingZohoSyncs();
+  return { processed: syncs.length, succeeded, failed };
+}
+
+/**
+ * Admin-only diagnostic runner.
+ * Verifies OAuth token refresh, checks live API connectivity,
+ * optionally creates a clearly identified test lead (without modifying real records),
+ * and verifies generated record ID.
+ */
+export async function runZohoDiagnostic(options?: { createTestLead?: boolean }): Promise<{
+  success: boolean;
+  tokenRefreshSuccess: boolean;
+  apiVerified: boolean;
+  testLeadCreated?: boolean;
+  testLeadId?: string;
+  pendingSyncStats?: { processed: number; succeeded: number; failed: number; queueSize: number };
+  message: string;
+  error?: string;
+}> {
+  if (!isZohoConfigured()) {
+    return {
+      success: false,
+      tokenRefreshSuccess: false,
+      apiVerified: false,
+      message: 'Zoho CRM credentials (ZOHO_CLIENT_ID / ZOHO_CLIENT_SECRET) are missing or incomplete in environment.',
+      error: 'Configuration incomplete',
+    };
+  }
+
+  const refreshRes = await refreshAccessToken();
+  if (!refreshRes.success || !refreshRes.accessToken) {
+    return {
+      success: false,
+      tokenRefreshSuccess: false,
+      apiVerified: false,
+      message: `Token refresh failed: ${refreshRes.error}`,
+      error: refreshRes.error,
+    };
+  }
+
+  try {
+    const apiRes = await zohoApiRequest('/Leads?fields=id&limit=1', {
+      method: 'GET',
+      customToken: refreshRes.accessToken,
+    });
+
+    if (apiRes.status !== 200) {
+      return {
+        success: false,
+        tokenRefreshSuccess: true,
+        apiVerified: false,
+        message: `Zoho CRM API returned HTTP ${apiRes.status} on verification check.`,
+        error: JSON.stringify(apiRes.data),
+      };
+    }
+
+    let testLeadId: string | undefined;
+    let testLeadCreated = false;
+
+    if (options?.createTestLead) {
+      const testTimestamp = new Date().toISOString();
+      const testLeadData = {
+        Last_Name: 'TestLead (Diagnostic)',
+        First_Name: 'System',
+        Email: `zoho-diagnostic-${Date.now()}@teja.studio`,
+        Company: 'Teja Web Studio Diagnostics',
+        Lead_Source: 'System Diagnostic Test',
+        Description: `[System Diagnostic] Safe test lead created via Admin Diagnostic endpoint at ${testTimestamp}. Confirms write permission and record ID generation.`,
+      };
+
+      const createRes = await zohoApiRequest('/Leads', {
+        method: 'POST',
+        body: { data: [testLeadData] },
+        customToken: refreshRes.accessToken,
+      });
+
+      if (createRes.status === 201 || createRes.status === 200) {
+        const recordResult = createRes.data?.data?.[0];
+        if (recordResult?.code === 'SUCCESS' && recordResult?.details?.id) {
+          testLeadId = recordResult.details.id;
+          testLeadCreated = true;
+        }
+      }
+    }
+
+    const queueDrain = await processPendingZohoSyncs();
+    const currentQueue = getPendingZohoSyncs();
+
+    return {
+      success: true,
+      tokenRefreshSuccess: true,
+      apiVerified: true,
+      testLeadCreated,
+      testLeadId,
+      pendingSyncStats: {
+        ...queueDrain,
+        queueSize: currentQueue.length,
+      },
+      message: testLeadCreated
+        ? `Zoho CRM fully verified: OAuth token refreshed, API connectivity confirmed, and test lead created (Record ID: ${testLeadId}).`
+        : 'Zoho CRM fully verified: OAuth token refreshed and API read permissions confirmed.',
+    };
+  } catch (err: any) {
+    return {
+      success: false,
+      tokenRefreshSuccess: true,
+      apiVerified: false,
+      message: `Failed to verify Zoho CRM API endpoint: ${err.message}`,
+      error: err.message,
+    };
+  }
+}
+

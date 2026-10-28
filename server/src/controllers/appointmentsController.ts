@@ -7,6 +7,7 @@ import { newToken, hashToken } from '../utils/security';
 import fs from 'fs';
 import path from 'path';
 import os from 'os';
+import { syncAppointmentToZoho } from '../services/zohoService';
 
 export interface LocalAppointment {
   _id: string;
@@ -20,6 +21,7 @@ export interface LocalAppointment {
   status: 'pending' | 'confirmed' | 'cancelled' | 'completed';
   meetingLink?: string;
   notes?: string;
+  zohoLeadId?: string;
   manageToken: string;
   manageTokenHash?: string;
   timeZone?: string;
@@ -251,6 +253,30 @@ export const bookAppointment = async (req: Request, res: Response): Promise<void
     all.push(newAppointment);
     inMemoryAppointments = all;
     persistAppointments();
+
+    // Trigger server-side Zoho CRM synchronization asynchronously/safely
+    if (newAppointment.clientEmail && newAppointment.clientName) {
+      syncAppointmentToZoho({
+        clientName: newAppointment.clientName,
+        clientEmail: newAppointment.clientEmail,
+        clientPhone: newAppointment.clientPhone,
+        serviceType: newAppointment.serviceType,
+        appointmentDate: newAppointment.appointmentDate,
+        startTime: newAppointment.startTime,
+        endTime: newAppointment.endTime,
+        meetingLink: generatedMeetingLink,
+        notes: newAppointment.notes,
+      })
+        .then((syncRes) => {
+          if (syncRes.success && syncRes.leadId) {
+            newAppointment.zohoLeadId = syncRes.leadId;
+            persistAppointments();
+          }
+        })
+        .catch((err) => {
+          console.warn('[Zoho CRM] Deferred appointment sync warning:', err.message);
+        });
+    }
 
     const whatsappText = encodeURIComponent(
       `Hello Teja Web Studio! I scheduled a consultation for ${appointmentDate} at ${startTime} regarding ${newAppointment.serviceType}. My name is ${newAppointment.clientName}.`,

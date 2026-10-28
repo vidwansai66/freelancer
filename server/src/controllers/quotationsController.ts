@@ -71,25 +71,25 @@ export const submitQuotation = async (req: Request, res: Response): Promise<void
       createdAt: new Date().toISOString(),
     };
 
-    // 1. If Zoho CRM is configured and authorized, sync quotation to Zoho CRM
-    if (isZohoConfigured() && hasZohoAuthorization()) {
-      const zohoResult = await syncQuotationToZoho(req.body);
-      if (!zohoResult.success) {
-        sendError(
-          res,
-          `Zoho CRM sync failed: ${zohoResult.error}. Please contact directly via WhatsApp: +91 94909 55048.`,
-          502,
-        );
-        return;
+    inMemoryQuotations.unshift(quotationRecord);
+
+    // 1. If Zoho CRM is configured, sync quotation or queue for background retry
+    if (isZohoConfigured()) {
+      try {
+        const zohoResult = await syncQuotationToZoho(req.body);
+        if (zohoResult.success && zohoResult.leadId) {
+          quotationRecord.zohoLeadId = zohoResult.leadId;
+        } else {
+          console.warn('[Zoho CRM] Quotation sync deferred/failed:', zohoResult.error);
+        }
+      } catch (err: any) {
+        console.warn('[Zoho CRM] Quotation sync exception:', err.message);
       }
-      quotationRecord.zohoLeadId = zohoResult.leadId;
     } else {
       console.warn(
-        '[Zoho CRM] Notice: Zoho CRM credentials not fully configured or authorization pending. Quotation saved to local session. Visit /api/zoho/auth to authorize.',
+        '[Zoho CRM] Notice: Zoho CRM credentials not configured. Quotation saved locally. Visit /api/zoho/auth to authorize.',
       );
     }
-
-    inMemoryQuotations.unshift(quotationRecord);
 
     // 2. Send optional email notifications if SMTP is enabled
     if (env.EMAIL_SERVICE_ENABLED) {

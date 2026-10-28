@@ -9,6 +9,7 @@ export interface IClientProject {
   quoteAmount?: number;
   status: string;
   meetingLink?: string;
+  zohoLeadId?: string;
   tokenHash: string;
   documents: string[];
   updates?: Array<{ text: string; at: string }>;

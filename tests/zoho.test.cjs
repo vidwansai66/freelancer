@@ -16,6 +16,11 @@ const {
   validateOAuthState,
   syncInquiryToZoho,
   syncQuotationToZoho,
+  syncClientToZoho,
+  syncAppointmentToZoho,
+  runZohoDiagnostic,
+  getPendingZohoSyncs,
+  queuePendingZohoSync,
 } = require('../server/dist/services/zohoService');
 
 test('Zoho CRM API Base URL Construction & Normalization', async (t) => {
@@ -47,9 +52,7 @@ test('Zoho CRM API Base URL Construction & Normalization', async (t) => {
 
 test('Zoho Service configuration check and OAuth state security', async (t) => {
   await t.test('detects unconfigured credentials', () => {
-    // When no client ID / secret are configured
     const configured = isZohoConfigured();
-    // Default env has empty strings for client ID/secret
     assert.strictEqual(typeof configured, 'boolean');
   });
 
@@ -129,64 +132,58 @@ test('Zoho Service lead syncing and state handling', async (t) => {
       assert.ok(result.error.includes('Zoho CRM is not configured') || result.error.includes('not authorized'));
     }
   });
-});
 
-test('Zoho Service lead payload formatting and name handling', async (t) => {
-  // Test simulated request mocking HTTPS calls
-  const originalRequest = https.request;
-  t.after(() => {
-    https.request = originalRequest;
+  await t.test('syncClientToZoho handles unconfigured environment safely', async () => {
+    // When credentials are not authorized, returns clean failure and enqueues
+    const result = await syncClientToZoho({
+      name: 'Rohan Mehra',
+      email: 'rohan.mehra@example.com',
+      company: 'Mehra Logistics',
+      title: 'Logistics Website',
+    }, false);
+
+    if (!isZohoConfigured() || !hasZohoAuthorization()) {
+      assert.strictEqual(result.success, false);
+      assert.ok(result.error);
+    }
   });
 
-  let capturedRequests = [];
-  https.request = function (options, callback) {
-    const reqInstance = {
-      headers: options.headers || {},
-      method: options.method,
-      path: options.path,
-      write: function (chunk) {
-        this.body = chunk;
-      },
-      end: function () {
-        capturedRequests.push({
-          method: options.method,
-          path: options.path,
-          headers: options.headers,
-          body: this.body ? JSON.parse(this.body) : null,
-        });
+  await t.test('syncAppointmentToZoho handles unconfigured environment safely', async () => {
+    const result = await syncAppointmentToZoho({
+      clientName: 'Sunita Rao',
+      clientEmail: 'sunita@example.com',
+      appointmentDate: '2026-11-10',
+      startTime: '11:00',
+      serviceType: 'Brand Identity',
+    }, false);
 
-        // Mock response
-        const resMock = {
-          statusCode: 200,
-          headers: { 'content-type': 'application/json' },
-          on: function (event, handler) {
-            if (event === 'data') {
-              // Return mock Zoho lead response
-              handler(
-                JSON.stringify({
-                  data: [
-                    {
-                      code: 'SUCCESS',
-                      details: { id: 'zoho-lead-998877' },
-                      message: 'record added',
-                    },
-                  ],
-                })
-              );
-            }
-            if (event === 'end') {
-              handler();
-            }
-          },
-        };
-        callback(resMock);
-      },
-      on: function () {},
-      setTimeout: function () {},
-      destroy: function () {},
-    };
-    return reqInstance;
-  };
+    if (!isZohoConfigured() || !hasZohoAuthorization()) {
+      assert.strictEqual(result.success, false);
+      assert.ok(result.error);
+    }
+  });
+});
 
-  assert.strictEqual(typeof https.request, 'function');
+test('Zoho Service recovery queue persists deferred sync items', async () => {
+  const initialQueue = getPendingZohoSyncs();
+  const initialLength = initialQueue.length;
+
+  queuePendingZohoSync('client', {
+    name: 'Test Client Queue',
+    email: 'queue.test@example.com',
+    title: 'Queued Website',
+  }, 'Simulated network offline');
+
+  const updatedQueue = getPendingZohoSyncs();
+  assert.ok(updatedQueue.length >= initialLength);
+  const found = updatedQueue.find((i) => i.payload.email === 'queue.test@example.com');
+  assert.ok(found);
+  assert.equal(found.type, 'client');
+  assert.equal(found.lastError, 'Simulated network offline');
+});
+
+test('Zoho Service Admin Diagnostic test verifies configuration status', async () => {
+  const diagResult = await runZohoDiagnostic({ createTestLead: false });
+  assert.ok(typeof diagResult.success === 'boolean');
+  assert.ok(typeof diagResult.message === 'string');
 });

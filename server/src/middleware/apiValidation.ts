@@ -277,7 +277,16 @@ export const apiValidation = (req: Request, res: Response, next: NextFunction) =
       });
     if (module === 'client-projects' && id === 'track') schema = z.object({ token });
     if (module === 'client-projects' && !id)
-      schema = z.object({ sourceType: z.enum(['inquiry', 'quotation']), sourceId: oid });
+      schema = z.object({
+        sourceType: z.string().optional(),
+        sourceId: z.string().optional(),
+        title: text.optional(),
+        clientName: text.optional(),
+        clientEmail: email.optional(),
+        proposal: long.optional(),
+        quoteAmount: money.optional(),
+        meetingLink: url.optional(),
+      });
     if (module === 'client-projects' && id && req.method === 'PUT')
       schema = z.object({
         status: z
