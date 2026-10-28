@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { Globe, Smartphone, Zap, Search, Code, Rocket, ArrowRight, Check } from 'lucide-react';
 import { Service } from '../../types';
 import { servicesApi } from '../../services/api';
+import { Seo } from '../../components/common/Seo';
 
 const iconMap: Record<string, React.ReactNode> = {
   Globe: <Globe className="h-6 w-6" />,
@@ -27,6 +28,10 @@ export const ServicesPage: React.FC = () => {
 
   return (
     <div className="pt-32 pb-24">
+      <Seo
+        title="Web Design & Development Services"
+        description="Custom web development, mobile-first responsive design, ultra-fast performance optimization, and search engine integration for growing businesses."
+      />
       <div className="mx-auto max-w-6xl px-6">
         {/* Header */}
         <div className="text-center max-w-2xl mx-auto mb-16">

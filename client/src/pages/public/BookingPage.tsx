@@ -12,6 +12,7 @@ import {
 } from 'lucide-react';
 import { appointmentsApi } from '../../services/api';
 import { TimeSlot } from '../../types';
+import { Seo } from '../../components/common/Seo';
 
 export const BookingPage: React.FC = () => {
   const { settings } = useSettings();
@@ -208,6 +209,10 @@ END:VCALENDAR`;
 
   return (
     <div className="pt-32 pb-24">
+      <Seo
+        title="Schedule a Discovery Consultation"
+        description="Book a live 30-minute discovery call to discuss your website design, architecture, scope, and timeline with our engineering team."
+      />
       <p className="text-center text-sm mt-4">
         Times are shown in {settings.timeZone}. Cancel or reschedule more than{' '}
         {settings.cancellationHours} hours before your booking.

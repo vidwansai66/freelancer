@@ -3,6 +3,7 @@ import { Field } from '../../components/common/Forms';
 import React, { useState } from 'react';
 import { Mail, MessageCircle, Send, Clock, CheckCircle2, AlertCircle } from 'lucide-react';
 import { inquiriesApi } from '../../services/api';
+import { Seo } from '../../components/common/Seo';
 
 export const ContactPage: React.FC = () => {
   const { settings } = useSettings();
@@ -70,6 +71,10 @@ export const ContactPage: React.FC = () => {
 
   return (
     <div className="pt-32 pb-24">
+      <Seo
+        title="Contact Teja Web Studio"
+        description="Have a question or looking for a website quote? Contact Teja Web Studio for direct consultation and project planning."
+      />
       <div className="mx-auto max-w-5xl px-6">
         {/* Header */}
         <div className="text-center max-w-2xl mx-auto mb-16">

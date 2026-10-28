@@ -48,19 +48,24 @@ if (
   }
 }
 
-// Client URL detection (supports custom CLIENT_URL or auto-injected VERCEL_URL)
+// Client URL detection: defaults to the primary production domain on Vercel
+const primaryProductionUrl = 'https://freelancer-one-woad.vercel.app';
 const defaultClientUrl =
   process.env.CLIENT_URL ||
-  (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : 'http://localhost:5173');
+  (process.env.NODE_ENV === 'production' || process.env.VERCEL
+    ? primaryProductionUrl
+    : 'http://localhost:5173');
 
 if (process.env.NODE_ENV === 'production' && !process.env.CLIENT_URL) {
-  envStatus.warnings.push('CLIENT_URL not explicitly set; derived from VERCEL_URL or default.');
+  envStatus.warnings.push('CLIENT_URL defaulting to canonical domain: ' + primaryProductionUrl);
 }
 
 export const env = {
   PORT: parseInt(process.env.PORT || '5000', 10),
   NODE_ENV: process.env.NODE_ENV || 'development',
   CLIENT_URL: defaultClientUrl,
+  PRIMARY_PRODUCTION_URL: primaryProductionUrl,
+  GOOGLE_SITE_VERIFICATION: process.env.GOOGLE_SITE_VERIFICATION || '',
   // Zoho CRM Configuration (India Data Center by default)
   ZOHO_CLIENT_ID: process.env.ZOHO_CLIENT_ID || '',
   ZOHO_CLIENT_SECRET: process.env.ZOHO_CLIENT_SECRET || '',

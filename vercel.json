@@ -9,6 +9,7 @@
     { "source": "/health", "destination": "/api/index?route=/health" },
     { "source": "/sitemap.xml", "destination": "/api/index?route=/sitemap.xml" },
     { "source": "/robots.txt", "destination": "/api/index?route=/robots.txt" },
+    { "source": "/(google[a-zA-Z0-9_-]+\\.html)", "destination": "/api/index?route=/$1" },
     { "source": "/(.*)", "destination": "/index.html" }
   ]
 }

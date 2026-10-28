@@ -4,6 +4,7 @@ import React, { useState, useEffect } from 'react';
 import { useLocation } from 'react-router-dom';
 import { Sparkles, Check, ArrowRight, CheckCircle2, AlertCircle, Shield } from 'lucide-react';
 import { quotationsApi } from '../../services/api';
+import { Seo } from '../../components/common/Seo';
 
 export const QuotationPage: React.FC = () => {
   const location = useLocation();
@@ -124,6 +125,10 @@ export const QuotationPage: React.FC = () => {
 
   return (
     <div className="pt-32 pb-24">
+      <Seo
+        title="Request a Custom Website Proposal"
+        description="Tell us about your business goals and technical requirements to receive a detailed website quotation with fixed turnaround and pricing."
+      />
       <div className="mx-auto max-w-4xl px-6">
         {/* Header */}
         <div className="text-center max-w-2xl mx-auto mb-14">

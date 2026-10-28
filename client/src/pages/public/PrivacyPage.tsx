@@ -1,10 +1,15 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
 import { ArrowLeft, Shield } from 'lucide-react';
+import { Seo } from '../../components/common/Seo';
 
 export const PrivacyPage: React.FC = () => {
   return (
     <div className="pt-32 pb-24">
+      <Seo
+        title="Privacy Policy"
+        description="Privacy policy and data handling practices at Teja Web Studio. Learn how your project inquiries and contact information are protected."
+      />
       <div className="mx-auto max-w-3xl px-6">
         <Link
           to="/"

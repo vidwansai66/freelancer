@@ -22,6 +22,7 @@ import { servicesApi, projectsApi, pricingApi, faqApi, testimonialsApi } from '.
 import { SpotlightCard } from '../../components/common/SpotlightCard';
 import { HeroVisualOrbit } from '../../components/common/HeroVisualOrbit';
 import { AgencyMarquee } from '../../components/common/AgencyMarquee';
+import { Seo } from '../../components/common/Seo';
 
 const iconMap: Record<string, React.ReactNode> = {
   Globe: <Globe className="h-6 w-6" />,
@@ -76,6 +77,10 @@ export const HomePage: React.FC = () => {
 
   return (
     <div className="relative overflow-hidden">
+      <Seo
+        title="Teja Web Studio — Simple, Affordable Websites for Small Businesses"
+        description="High-performance, modern, and affordable websites for businesses and startups. Launched in days, not months."
+      />
       {/* ======================================================== */}
       {/* 1. HERO SECTION: CINEMATIC FIRST VIEWPORT                */}
       {/* ======================================================== */}

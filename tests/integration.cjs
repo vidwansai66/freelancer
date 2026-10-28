@@ -290,7 +290,7 @@ test('Multiple-call booking preserves separate records independently', async () 
 });
 
 test('Meeting link updates synchronize between admin and client dashboard', async () => {
-  const futureDate = getTestWeekday(50);
+  const futureDate = getTestWeekday(55);
 
   // 1. Client books appointment with initial meeting link
   const bookRes = await apiRequest('POST', '/api/appointments', {
@@ -452,6 +452,54 @@ test('Zoho CRM admin diagnostic endpoint is protected and responds with structur
   const pendingRes = await apiRequest('GET', '/api/zoho/pending', null, authCookie);
   assert.equal(pendingRes.status, 200);
   assert.ok(typeof pendingRes.data.data.count === 'number');
+});
+
+test('Technical SEO: /sitemap.xml returns valid XML with canonical indexable URLs', async () => {
+  const res = await apiRequest('GET', '/sitemap.xml');
+  assert.equal(res.status, 200);
+  const contentType = res.headers.get('content-type') || '';
+  assert.ok(contentType.includes('xml'), `Expected XML content-type, got: ${contentType}`);
+
+  const xml = typeof res.data === 'string' ? res.data : res.data.raw || '';
+  assert.ok(xml.includes('<?xml version="1.0" encoding="UTF-8"?>'));
+  assert.ok(xml.includes('<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">'));
+  assert.ok(xml.includes('https://freelancer-one-woad.vercel.app/'));
+  assert.ok(xml.includes('<changefreq>'));
+  assert.ok(xml.includes('<priority>'));
+
+  // Ensure private or admin routes are NOT in sitemap
+  assert.ok(!xml.includes('/admin'));
+  assert.ok(!xml.includes('/track'));
+  assert.ok(!xml.includes('/manage-booking'));
+  assert.ok(!xml.includes('/api/'));
+  assert.ok(!xml.includes('localhost'));
+});
+
+test('Technical SEO: /robots.txt blocks private paths and points to canonical sitemap', async () => {
+  const res = await apiRequest('GET', '/robots.txt');
+  assert.equal(res.status, 200);
+  const contentType = res.headers.get('content-type') || '';
+  assert.ok(contentType.includes('text/plain'), `Expected text/plain, got: ${contentType}`);
+
+  const txt = typeof res.data === 'string' ? res.data : res.data.raw || '';
+  assert.ok(txt.includes('User-agent: *'));
+  assert.ok(txt.includes('Allow: /'));
+  assert.ok(txt.includes('Disallow: /admin'));
+  assert.ok(txt.includes('Disallow: /track'));
+  assert.ok(txt.includes('Disallow: /manage-booking'));
+  assert.ok(txt.includes('Disallow: /api/'));
+  assert.ok(txt.includes('Sitemap: https://freelancer-one-woad.vercel.app/sitemap.xml'));
+});
+
+test('Google Search Console: HTML-file verification route serves exact verification body', async () => {
+  const testCode = '4b8c6e2a1d9e7f03';
+  const res = await apiRequest('GET', `/google${testCode}.html`);
+  assert.equal(res.status, 200);
+  const contentType = res.headers.get('content-type') || '';
+  assert.ok(contentType.includes('text/html'), `Expected text/html, got: ${contentType}`);
+
+  const body = typeof res.data === 'string' ? res.data : res.data.raw || '';
+  assert.equal(body.trim(), `google-site-verification: google${testCode}.html`);
 });
 
 

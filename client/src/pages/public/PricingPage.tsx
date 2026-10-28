@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { Check, X, ArrowRight, HelpCircle, Calculator, Sparkles } from 'lucide-react';
 import { PricingPlan } from '../../types';
 import { pricingApi } from '../../services/api';
+import { Seo } from '../../components/common/Seo';
 
 export const PricingPage: React.FC = () => {
   const [plans, setPlans] = useState<PricingPlan[]>([]);
@@ -59,6 +60,10 @@ export const PricingPage: React.FC = () => {
 
   return (
     <div className="pt-32 pb-24">
+      <Seo
+        title="Web Design Pricing & Packages"
+        description="Transparent, fixed-price website development packages. Starter, Business, and Custom tiers with zero hidden fees and full code ownership."
+      />
       <div className="mx-auto max-w-6xl px-6">
         {/* Header */}
         <div className="text-center max-w-2xl mx-auto mb-16">

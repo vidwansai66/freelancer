@@ -3,6 +3,7 @@ import { useParams, Link } from 'react-router-dom';
 import { ArrowLeft, Check, Calendar, ArrowRight, ShieldCheck, Clock, Sparkles } from 'lucide-react';
 import { Service } from '../../types';
 import { servicesApi } from '../../services/api';
+import { Seo } from '../../components/common/Seo';
 
 export const ServiceDetailPage: React.FC = () => {
   const { slug } = useParams<{ slug: string }>();
@@ -30,6 +31,7 @@ export const ServiceDetailPage: React.FC = () => {
   if (!service) {
     return (
       <div className="pt-40 pb-24 text-center">
+        <Seo title="Service Not Found" noindex={true} />
         <h1 className="text-2xl font-bold text-white">Service Not Found</h1>
         <p className="mt-2 text-muted-foreground">The requested service could not be located.</p>
         <Link to="/services" className="mt-4 inline-block text-primary hover:underline">
@@ -41,6 +43,20 @@ export const ServiceDetailPage: React.FC = () => {
 
   return (
     <div className="pt-32 pb-24">
+      <Seo
+        title={`${service.title} | Web Studio Services`}
+        description={service.shortDescription || service.fullDescription.slice(0, 155)}
+        jsonLd={{
+          "@context": "https://schema.org",
+          "@type": "Service",
+          "name": service.title,
+          "description": service.shortDescription || service.fullDescription,
+          "provider": {
+            "@type": "ProfessionalService",
+            "name": "Teja Web Studio"
+          }
+        }}
+      />
       <div className="mx-auto max-w-4xl px-6">
         <Link
           to="/services"

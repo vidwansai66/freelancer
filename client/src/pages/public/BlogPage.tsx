@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { Clock, Search, ArrowRight, Tag } from 'lucide-react';
 import { BlogPost } from '../../types';
 import { blogApi } from '../../services/api';
+import { Seo } from '../../components/common/Seo';
 
 export const BlogPage: React.FC = () => {
   const [posts, setPosts] = useState<BlogPost[]>([]);
@@ -21,6 +22,10 @@ export const BlogPage: React.FC = () => {
 
   return (
     <div className="pt-32 pb-24">
+      <Seo
+        title="Web Design & Growth Articles"
+        description="Practical web design, development, and conversion optimization strategies for small business owners and startups."
+      />
       <div className="mx-auto max-w-6xl px-6">
         {/* Header */}
         <div className="text-center max-w-2xl mx-auto mb-14">

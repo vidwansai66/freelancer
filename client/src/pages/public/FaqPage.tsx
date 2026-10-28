@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { ChevronDown, Search, MessageSquare, ArrowRight } from 'lucide-react';
 import { FAQ } from '../../types';
 import { faqApi } from '../../services/api';
+import { Seo } from '../../components/common/Seo';
 
 export const FaqPage: React.FC = () => {
   const [faqs, setFaqs] = useState<FAQ[]>([]);
@@ -37,8 +38,26 @@ export const FaqPage: React.FC = () => {
     }));
   };
 
+  const faqSchema = faqs.length > 0 ? {
+    "@context": "https://schema.org",
+    "@type": "FAQPage",
+    "mainEntity": faqs.slice(0, 10).map((f) => ({
+      "@type": "Question",
+      "name": f.question,
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": f.answer
+      }
+    }))
+  } : undefined;
+
   return (
     <div className="pt-32 pb-24">
+      <Seo
+        title="Frequently Asked Questions (FAQ)"
+        description="Common questions answered about custom website development, turnaround times, SEO optimization, and pricing."
+        jsonLd={faqSchema}
+      />
       <div className="mx-auto max-w-4xl px-6">
         {/* Header */}
         <div className="text-center max-w-2xl mx-auto mb-14">

@@ -1,10 +1,15 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
 import { ArrowLeft, FileText } from 'lucide-react';
+import { Seo } from '../../components/common/Seo';
 
 export const TermsPage: React.FC = () => {
   return (
     <div className="pt-32 pb-24">
+      <Seo
+        title="Terms of Service"
+        description="Terms of service, delivery policies, payment milestones, and code ownership conditions for clients of Teja Web Studio."
+      />
       <div className="mx-auto max-w-3xl px-6">
         <Link
           to="/"

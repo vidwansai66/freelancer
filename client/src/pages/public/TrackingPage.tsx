@@ -1,12 +1,15 @@
 import { useState } from 'react';
 import { api } from '../../services/api';
 import { Field, downloadFile } from '../../components/common/Forms';
+import { Seo } from '../../components/common/Seo';
+
 export function TrackingPage() {
   const [token, setToken] = useState(() => window.location.hash.slice(1)),
     [project, setProject] = useState<any>(null),
     [error, setError] = useState('');
   return (
     <div className="mx-auto max-w-3xl px-6 pt-32 pb-24 space-y-6">
+      <Seo title="Track Project" noindex={true} />
       <h1 className="text-3xl">Track your project</h1>
       <p>
         Enter the private code shared by the studio. Keep it safe: it gives access to your project

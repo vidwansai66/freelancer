@@ -1,6 +1,7 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
 import { Shield, Sparkles, Code2, Rocket, Heart, ArrowRight, CheckCircle2 } from 'lucide-react';
+import { Seo } from '../../components/common/Seo';
 
 export const AboutPage: React.FC = () => {
   const techStack = [
@@ -61,6 +62,10 @@ export const AboutPage: React.FC = () => {
 
   return (
     <div className="pt-32 pb-24">
+      <Seo
+        title="About Our Web Studio"
+        description="Learn how Teja Web Studio designs and engineers high-speed, modern websites for businesses and startups without bloated agency retainers."
+      />
       <div className="mx-auto max-w-5xl px-6">
         {/* Header */}
         <div className="text-center max-w-2xl mx-auto mb-16">

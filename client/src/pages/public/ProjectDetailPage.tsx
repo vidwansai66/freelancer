@@ -4,6 +4,7 @@ import { useParams, Link } from 'react-router-dom';
 import { ArrowLeft, ExternalLink, Code2, CheckCircle2, Calendar, Sparkles } from 'lucide-react';
 import { Project } from '../../types';
 import { projectsApi } from '../../services/api';
+import { Seo } from '../../components/common/Seo';
 
 export const ProjectDetailPage: React.FC = () => {
   const { slug } = useParams<{ slug: string }>();
@@ -31,6 +32,7 @@ export const ProjectDetailPage: React.FC = () => {
   if (!project) {
     return (
       <div className="pt-40 pb-24 text-center">
+        <Seo title="Project Not Found" noindex={true} />
         <h1 className="text-2xl font-bold text-white">Project Not Found</h1>
         <p className="mt-2 text-muted-foreground">The requested case study does not exist.</p>
         <Link to="/portfolio" className="mt-4 inline-block text-primary hover:underline">
@@ -42,6 +44,11 @@ export const ProjectDetailPage: React.FC = () => {
 
   return (
     <div className="pt-32 pb-24">
+      <Seo
+        title={`${project.title} — Case Study`}
+        description={`${project.category} case study for ${project.clientName}. ${project.resultStat || 'Engineered by Teja Web Studio.'}`}
+        ogImage={project.featuredImage}
+      />
       <div className="mx-auto max-w-4xl px-6">
         <Link
           to="/portfolio"

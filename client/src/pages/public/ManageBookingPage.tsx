@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { api, appointmentsApi } from '../../services/api';
 import { Field, fieldClass } from '../../components/common/Forms';
 import { Video, Calendar, Clock, CheckCircle2, AlertCircle, RefreshCw, XCircle, Copy, Check } from 'lucide-react';
+import { Seo } from '../../components/common/Seo';
 
 export function ManageBookingPage() {
   const [token, setToken] = useState(() => window.location.hash.slice(1));
@@ -115,6 +116,7 @@ export function ManageBookingPage() {
 
   return (
     <div className="mx-auto max-w-2xl px-6 pt-32 pb-24 space-y-8 animate-fade-in">
+      <Seo title="Manage Consultation" noindex={true} />
       <div className="text-center max-w-lg mx-auto">
         <span className="text-xs font-semibold tracking-widest text-primary uppercase">
           Client Portal

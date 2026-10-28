@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { Star, MessageSquarePlus, CheckCircle2, AlertCircle, X } from 'lucide-react';
 import { Testimonial } from '../../types';
 import { testimonialsApi } from '../../services/api';
+import { Seo } from '../../components/common/Seo';
 
 export const ReviewsPage: React.FC = () => {
   const [reviews, setReviews] = useState<Testimonial[]>([]);
@@ -54,6 +55,10 @@ export const ReviewsPage: React.FC = () => {
 
   return (
     <div className="pt-32 pb-24">
+      <Seo
+        title="Client Reviews & Testimonials"
+        description="Read verified client feedback and testimonials from business owners who partnered with Teja Web Studio for their custom websites."
+      />
       <div className="mx-auto max-w-6xl px-6">
         {/* Header */}
         <div className="text-center max-w-2xl mx-auto mb-14">
