@@ -39,11 +39,11 @@ export const AdminProjectsPage: React.FC = () => {
 
   const fetchProjects = () => {
     setLoading(true);
-    api
-      .get('/projects', { params: { page: listPage, limit: 20, search: listSearch } })
+    projectsApi
+      .getAll({ page: listPage, limit: 20, search: listSearch })
       .then((res) => {
-        setProjects(res.data.data || []);
-        setListPages(res.data.meta?.totalPages || 1);
+        setProjects(res.data || []);
+        setListPages(res.meta?.totalPages || res.totalPages || 1);
       })
       .catch((err) => console.error(err))
       .finally(() => setLoading(false));

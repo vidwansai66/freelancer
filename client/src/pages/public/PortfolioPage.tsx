@@ -6,19 +6,41 @@ import { projectsApi } from '../../services/api';
 import { Seo } from '../../components/common/Seo';
 
 export const PortfolioPage: React.FC = () => {
+  const [allProjects, setAllProjects] = useState<Project[]>([]);
   const [projects, setProjects] = useState<Project[]>([]);
   const [selectedCategory, setSelectedCategory] = useState<string>('All');
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [loading, setLoading] = useState(true);
 
-  const categories = [
-    'All',
-    'Coffee Shop & Bakery',
-    'Fitness Studio & Gym',
-    'Agency Website',
-    'E-Commerce',
-    'SaaS',
-  ];
+  useEffect(() => {
+    projectsApi
+      .getAll({ limit: 100 })
+      .then((res) => {
+        setAllProjects(res.data || []);
+      })
+      .catch(() => {});
+  }, []);
+
+  const categories = React.useMemo(() => {
+    const list = ['All'];
+    const seen = new Set<string>(['All']);
+    allProjects.forEach((p) => {
+      const cat = p.category?.trim();
+      if (cat && !seen.has(cat)) {
+        seen.add(cat);
+        list.push(cat);
+      }
+    });
+    ['Web Application', 'Coffee Shop & Bakery', 'Fitness Studio & Gym', 'Agency Website', 'E-Commerce', 'SaaS'].forEach(
+      (cat) => {
+        if (!seen.has(cat)) {
+          seen.add(cat);
+          list.push(cat);
+        }
+      },
+    );
+    return list;
+  }, [allProjects]);
 
   useEffect(() => {
     setLoading(true);
@@ -26,7 +48,7 @@ export const PortfolioPage: React.FC = () => {
       .getAll({
         category: selectedCategory === 'All' ? undefined : selectedCategory,
         search: searchQuery || undefined,
-        limit: 20,
+        limit: 50,
       })
       .then((res) => {
         setProjects(res.data || []);

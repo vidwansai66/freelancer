@@ -19,7 +19,26 @@ import fs from 'fs';
 import path from 'path';
 import os from 'os';
 
-const CONTENT_FILE = path.join(os.tmpdir(), 'wp_content_store.json');
+const getStorageFilePaths = (): string[] => {
+  const list: string[] = [];
+  const baseDataDir = process.cwd().endsWith('server')
+    ? path.join(process.cwd(), 'data')
+    : path.join(process.cwd(), 'server', 'data');
+
+  try {
+    if (!fs.existsSync(baseDataDir)) fs.mkdirSync(baseDataDir, { recursive: true });
+    list.push(path.join(baseDataDir, 'wp_content_store.json'));
+  } catch {}
+
+  try {
+    const relData = path.resolve(__dirname, '..', '..', 'data');
+    if (!fs.existsSync(relData)) fs.mkdirSync(relData, { recursive: true });
+    list.push(path.join(relData, 'wp_content_store.json'));
+  } catch {}
+
+  list.push(path.join(os.tmpdir(), 'wp_content_store.json'));
+  return Array.from(new Set(list));
+};
 
 class ContentStore {
   private services: ServiceItem[] = [...servicesData];
@@ -32,49 +51,55 @@ class ContentStore {
 
   constructor() {
     this.loadFromDisk();
+    this.saveToDisk();
   }
 
   private loadFromDisk(): void {
-    try {
-      if (fs.existsSync(CONTENT_FILE)) {
-        const raw = fs.readFileSync(CONTENT_FILE, 'utf-8');
-        const parsed = JSON.parse(raw);
-        if (parsed) {
-          if (Array.isArray(parsed.services)) this.services = parsed.services;
-          if (Array.isArray(parsed.projects)) this.projects = parsed.projects;
-          if (Array.isArray(parsed.pricingPlans)) this.pricingPlans = parsed.pricingPlans;
-          if (Array.isArray(parsed.faqs)) this.faqs = parsed.faqs;
-          if (Array.isArray(parsed.testimonials)) this.testimonials = parsed.testimonials;
-          if (Array.isArray(parsed.blogPosts)) this.blogPosts = parsed.blogPosts;
-          if (parsed.settings) this.settings = { ...this.settings, ...parsed.settings };
+    const paths = getStorageFilePaths();
+    for (const filePath of paths) {
+      try {
+        if (fs.existsSync(filePath)) {
+          const raw = fs.readFileSync(filePath, 'utf-8');
+          const parsed = JSON.parse(raw);
+          if (parsed) {
+            if (Array.isArray(parsed.services) && parsed.services.length > 0) this.services = parsed.services;
+            if (Array.isArray(parsed.projects) && parsed.projects.length > 0) this.projects = parsed.projects;
+            if (Array.isArray(parsed.pricingPlans) && parsed.pricingPlans.length > 0) this.pricingPlans = parsed.pricingPlans;
+            if (Array.isArray(parsed.faqs) && parsed.faqs.length > 0) this.faqs = parsed.faqs;
+            if (Array.isArray(parsed.testimonials) && parsed.testimonials.length > 0) this.testimonials = parsed.testimonials;
+            if (Array.isArray(parsed.blogPosts) && parsed.blogPosts.length > 0) this.blogPosts = parsed.blogPosts;
+            if (parsed.settings) this.settings = { ...this.settings, ...parsed.settings };
+            return;
+          }
         }
+      } catch {
+        // Try next candidate
       }
-    } catch {
-      // Ignore read errors
     }
   }
 
   private saveToDisk(): void {
-    try {
-      fs.writeFileSync(
-        CONTENT_FILE,
-        JSON.stringify(
-          {
-            services: this.services,
-            projects: this.projects,
-            pricingPlans: this.pricingPlans,
-            faqs: this.faqs,
-            testimonials: this.testimonials,
-            blogPosts: this.blogPosts,
-            settings: this.settings,
-          },
-          null,
-          2,
-        ),
-        'utf-8',
-      );
-    } catch {
-      // Ignore write errors
+    const payload = JSON.stringify(
+      {
+        services: this.services,
+        projects: this.projects,
+        pricingPlans: this.pricingPlans,
+        faqs: this.faqs,
+        testimonials: this.testimonials,
+        blogPosts: this.blogPosts,
+        settings: this.settings,
+      },
+      null,
+      2,
+    );
+
+    const paths = getStorageFilePaths();
+    for (const filePath of paths) {
+      try {
+        fs.writeFileSync(filePath, payload, 'utf-8');
+      } catch {
+        // Ignore write error for read-only filesystem paths
+      }
     }
   }
 
@@ -134,22 +159,46 @@ class ContentStore {
   }
 
   // Projects
-  getProjects(params?: { category?: string; search?: string; page?: number; limit?: number }) {
+  getProjects(params?: { category?: string; search?: string; page?: number; limit?: number; featured?: string | boolean }) {
     this.loadFromDisk();
     let list = [...this.projects];
-    if (params?.category) {
-      list = list.filter((p) => p.category.toLowerCase() === params.category!.toLowerCase());
+    if (params?.featured !== undefined) {
+      const want = String(params.featured) === 'true';
+      list = list.filter((p) => Boolean(p.isFeatured) === want);
+    }
+    if (params?.category && params.category !== 'All') {
+      const catLower = params.category.toLowerCase().trim();
+      list = list.filter((p) => p.category.toLowerCase().trim() === catLower);
     }
     if (params?.search) {
-      const q = params.search.toLowerCase();
+      const q = params.search.toLowerCase().trim();
       list = list.filter(
         (p) =>
           p.title.toLowerCase().includes(q) ||
           p.category.toLowerCase().includes(q) ||
-          p.clientName.toLowerCase().includes(q),
+          p.clientName.toLowerCase().includes(q) ||
+          (Array.isArray(p.technologies) && p.technologies.some((t) => t.toLowerCase().includes(q))),
       );
     }
-    list.sort((a, b) => (a.orderIndex || 0) - (b.orderIndex || 0));
+    list.sort((a, b) => {
+      // 1. Featured projects first
+      const featA = a.isFeatured ? 1 : 0;
+      const featB = b.isFeatured ? 1 : 0;
+      if (featA !== featB) {
+        return featB - featA;
+      }
+      // 2. Lowest orderIndex first if explicitly set and distinct
+      const ordA = a.orderIndex !== undefined && a.orderIndex !== null ? a.orderIndex : 999;
+      const ordB = b.orderIndex !== undefined && b.orderIndex !== null ? b.orderIndex : 999;
+      if (ordA !== ordB) {
+        return ordA - ordB;
+      }
+      // 3. Newest createdAt first
+      const timeA = new Date(a.createdAt || 0).getTime();
+      const timeB = new Date(b.createdAt || 0).getTime();
+      return timeB - timeA;
+    });
+
     const total = list.length;
     const page = Number(params?.page) || 1;
     const limit = Number(params?.limit) || 20;
@@ -166,12 +215,12 @@ class ContentStore {
 
   getProjectBySlug(slug: string): ProjectItem | undefined {
     this.loadFromDisk();
-    return this.projects.find((p) => p.slug === slug);
+    return this.projects.find((p) => p.slug === slug || p._id === slug);
   }
 
   getProjectById(id: string): ProjectItem | undefined {
     this.loadFromDisk();
-    return this.projects.find((p) => p._id === id);
+    return this.projects.find((p) => p._id === id || p.slug === id);
   }
 
   addProject(data: Partial<ProjectItem>): ProjectItem {
@@ -180,7 +229,7 @@ class ContentStore {
       _id: data._id || `prj-${randomUUID().slice(0, 8)}`,
       title: data.title || 'New Project',
       slug: data.slug || `project-${Date.now()}`,
-      category: data.category || 'Web Design',
+      category: data.category || 'Web Application',
       clientName: data.clientName || '',
       resultStat: data.resultStat || '',
       featuredImage: data.featuredImage || '',
@@ -189,18 +238,19 @@ class ContentStore {
       githubUrl: data.githubUrl || '',
       technologies: Array.isArray(data.technologies) ? data.technologies : [],
       caseStudyMarkdown: data.caseStudyMarkdown || '',
-      isFeatured: Boolean(data.isFeatured),
-      orderIndex: Number(data.orderIndex) || this.projects.length + 1,
+      isFeatured: data.isFeatured !== undefined ? Boolean(data.isFeatured) : true,
+      orderIndex: data.orderIndex !== undefined && Number(data.orderIndex) >= 0 ? Number(data.orderIndex) : 0,
       createdAt: new Date().toISOString(),
     };
-    this.projects.push(newProject);
+    // Prepend new project so it immediately shows at the top
+    this.projects.unshift(newProject);
     this.saveToDisk();
     return newProject;
   }
 
   updateProject(id: string, data: Partial<ProjectItem>): ProjectItem | undefined {
     this.loadFromDisk();
-    const index = this.projects.findIndex((p) => p._id === id);
+    const index = this.projects.findIndex((p) => p._id === id || p.slug === id);
     if (index === -1) return undefined;
     this.projects[index] = { ...this.projects[index], ...data };
     this.saveToDisk();
@@ -210,7 +260,7 @@ class ContentStore {
   deleteProject(id: string): boolean {
     this.loadFromDisk();
     const prevLen = this.projects.length;
-    this.projects = this.projects.filter((p) => p._id !== id);
+    this.projects = this.projects.filter((p) => p._id !== id && p.slug !== id);
     this.saveToDisk();
     return this.projects.length < prevLen;
   }

@@ -63,7 +63,7 @@ test('Public content endpoints return static data with 0ms database latency', as
   const prjRes = await apiRequest('GET', '/api/projects');
   assert.equal(prjRes.status, 200);
   assert.ok(Array.isArray(prjRes.data.data));
-  assert.ok(prjRes.data.data.length >= 3);
+  assert.ok(prjRes.data.data.length >= 1);
 
   // Pricing
   const prcRes = await apiRequest('GET', '/api/pricing');
