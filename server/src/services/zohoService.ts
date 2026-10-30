@@ -587,10 +587,22 @@ function splitName(fullName: string): { firstName: string; lastName: string } {
 /**
  * Process a Contact Form submission and sync to Zoho CRM Leads
  */
+const isTestEmail = (email?: string): boolean => {
+  if (!email) return false;
+  return /@(?:example\.(?:com|in|org)|test\.(?:com|in|org))/i.test(email) || process.env.DISABLE_ZOHO_SYNC === 'true';
+};
+
 export async function syncInquiryToZoho(
   payload: ContactFormPayload,
   shouldQueueOnFailure: boolean = true,
 ): Promise<ZohoSyncResult> {
+  if (isTestEmail(payload.email)) {
+    return {
+      success: true,
+      leadId: 'test-lead-id',
+      message: 'Test mode: Zoho CRM sync bypassed for test email.',
+    };
+  }
   if (!isZohoConfigured()) {
     if (shouldQueueOnFailure) queuePendingZohoSync('inquiry', payload, 'Zoho CRM credentials not configured');
     return {
@@ -716,6 +728,13 @@ export async function syncQuotationToZoho(
   payload: QuotationFormPayload,
   shouldQueueOnFailure: boolean = true,
 ): Promise<ZohoSyncResult> {
+  if (isTestEmail(payload.email)) {
+    return {
+      success: true,
+      leadId: 'test-lead-id',
+      message: 'Test mode: Zoho CRM sync bypassed for test email.',
+    };
+  }
   if (!isZohoConfigured()) {
     if (shouldQueueOnFailure) queuePendingZohoSync('quotation', payload, 'Zoho CRM credentials not configured');
     return {
@@ -850,6 +869,13 @@ export async function syncClientToZoho(
   payload: ClientSyncPayload,
   shouldQueueOnFailure: boolean = true,
 ): Promise<ZohoSyncResult> {
+  if (isTestEmail(payload.email)) {
+    return {
+      success: true,
+      leadId: 'test-lead-id',
+      message: 'Test mode: Zoho CRM sync bypassed for test email.',
+    };
+  }
   if (!isZohoConfigured()) {
     if (shouldQueueOnFailure) queuePendingZohoSync('client', payload, 'Zoho CRM credentials not configured');
     return {
@@ -982,6 +1008,13 @@ export async function syncAppointmentToZoho(
   payload: AppointmentSyncPayload,
   shouldQueueOnFailure: boolean = true,
 ): Promise<ZohoSyncResult> {
+  if (isTestEmail(payload.clientEmail)) {
+    return {
+      success: true,
+      leadId: 'test-lead-id',
+      message: 'Test mode: Zoho CRM sync bypassed for test email.',
+    };
+  }
   if (!isZohoConfigured()) {
     if (shouldQueueOnFailure) queuePendingZohoSync('appointment', payload, 'Zoho CRM credentials not configured');
     return {
