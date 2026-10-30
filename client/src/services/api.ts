@@ -132,7 +132,23 @@ export const projectsApi = {
     const customProjects = getCustomProjects();
     const deletedIds = new Set(getDeletedProjectIds());
 
-    const validCustom = customProjects.filter(
+    // Auto-persist server projects to localStorage so they survive any server restart or cold lambda
+    if (serverProjects.length > 0) {
+      const existingIds = new Set(customProjects.map((p) => p._id || p.id));
+      const newItems = serverProjects.filter(
+        (sp) =>
+          !deletedIds.has(sp._id) &&
+          !deletedIds.has(sp.slug) &&
+          !existingIds.has(sp._id || sp.id) &&
+          !customProjects.some((cp) => cp.slug === sp.slug),
+      );
+      if (newItems.length > 0) {
+        saveCustomProjects([...customProjects, ...newItems]);
+      }
+    }
+
+    const currentCustom = getCustomProjects();
+    const validCustom = currentCustom.filter(
       (p) => !deletedIds.has(p._id) && !deletedIds.has(p.id) && !deletedIds.has(p.slug),
     );
 

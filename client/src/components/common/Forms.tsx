@@ -83,6 +83,78 @@ export function Pagination({
     </nav>
   );
 }
+const compressImage = async (imageFile: File): Promise<{ dataUrl: string; base64: string; mime: string }> => {
+  if (!imageFile.type.startsWith('image/')) {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => {
+        const full = String(reader.result);
+        resolve({ dataUrl: full, base64: full.split(',')[1] || '', mime: imageFile.type });
+      };
+      reader.onerror = reject;
+      reader.readAsDataURL(imageFile);
+    });
+  }
+
+  return new Promise((resolve) => {
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      const rawDataUrl = String(ev.target?.result);
+      const img = new Image();
+      img.onload = () => {
+        try {
+          const maxDim = 1200;
+          let width = img.width;
+          let height = img.height;
+          if (width > maxDim || height > maxDim) {
+            if (width > height) {
+              height = Math.round((height * maxDim) / width);
+              width = maxDim;
+            } else {
+              width = Math.round((width * maxDim) / height);
+              height = maxDim;
+            }
+          }
+          const canvas = document.createElement('canvas');
+          canvas.width = width;
+          canvas.height = height;
+          const ctx = canvas.getContext('2d');
+          if (ctx) {
+            ctx.drawImage(img, 0, 0, width, height);
+            const targetMime = imageFile.type === 'image/png' ? 'image/png' : 'image/jpeg';
+            const compressedDataUrl = canvas.toDataURL(targetMime, 0.82);
+            resolve({
+              dataUrl: compressedDataUrl,
+              base64: compressedDataUrl.split(',')[1] || '',
+              mime: targetMime,
+            });
+            return;
+          }
+        } catch {
+          // fallback
+        }
+        resolve({
+          dataUrl: rawDataUrl,
+          base64: rawDataUrl.split(',')[1] || '',
+          mime: imageFile.type,
+        });
+      };
+      img.onerror = () => {
+        resolve({
+          dataUrl: rawDataUrl,
+          base64: rawDataUrl.split(',')[1] || '',
+          mime: imageFile.type,
+        });
+      };
+      img.src = rawDataUrl;
+    };
+    reader.onerror = () => {
+      resolve({ dataUrl: '', base64: '', mime: imageFile.type });
+    };
+    reader.readAsDataURL(imageFile);
+  });
+};
+
 export function UploadField({
   label,
   visibility = 'public',
@@ -90,7 +162,7 @@ export function UploadField({
 }: {
   label: string;
   visibility?: 'public' | 'private';
-  onUploaded: (file: { fileId: string; token: string; filename: string; url: string }) => void;
+  onUploaded: (file: { fileId: string; token: string; filename: string; url: string; dataUrl?: string }) => void;
 }) {
   const id = useId();
   const [busy, setBusy] = useState(false);
@@ -139,26 +211,35 @@ export function UploadField({
             const file = e.target.files?.[0];
             if (!file) return;
             setError('');
-            if (file.size > 5 * 1024 * 1024) {
-              setError('Choose a file smaller than 5 MB.');
+            if (file.size > 10 * 1024 * 1024) {
+              setError('Choose a file smaller than 10 MB.');
               return;
             }
             setBusy(true);
             try {
-              const base64 = await new Promise<string>((resolve, reject) => {
-                const reader = new FileReader();
-                reader.onload = () => resolve(String(reader.result).split(',')[1]);
-                reader.onerror = reject;
-                reader.readAsDataURL(file);
-              });
-              const result = await api.post('/files', {
-                filename: file.name,
-                mime: file.type,
-                base64,
-                visibility,
-              });
+              const { dataUrl, base64, mime } = await compressImage(file);
+              let serverData: any = {};
+              try {
+                const result = await api.post('/files', {
+                  filename: file.name,
+                  mime,
+                  base64,
+                  visibility,
+                });
+                serverData = result.data?.data || {};
+              } catch {
+                // Serverless or offline fallback
+              }
+
               setUploadedName(file.name);
-              onUploaded(result.data.data);
+              // Use permanent dataUrl so the image is self-contained and never lost on refresh
+              onUploaded({
+                fileId: serverData.fileId || `local-${Date.now()}`,
+                token: serverData.token || '',
+                filename: file.name,
+                url: dataUrl || serverData.url,
+                dataUrl,
+              });
             } catch (err: any) {
               setError(err.response?.data?.error || 'Upload failed. Please try another file.');
             } finally {

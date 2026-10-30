@@ -77,7 +77,11 @@ export const AdminProjectsPage: React.FC = () => {
     setClientName(p.clientName || p.title);
     setResultStat(p.resultStat || '');
     setFeaturedImage(p.featuredImage);
-    setImageMode(p.featuredImage?.startsWith('/api/files/') ? 'upload' : 'url');
+    setImageMode(
+      p.featuredImage?.startsWith('data:') || p.featuredImage?.startsWith('/api/files/')
+        ? 'upload'
+        : 'url',
+    );
     setLiveUrl(p.liveUrl || '');
     setIsFeatured(p.isFeatured !== false);
     setErrorMessage('');
@@ -448,7 +452,7 @@ export const AdminProjectsPage: React.FC = () => {
                         label="Upload screenshot from device"
                         visibility="public"
                         onUploaded={(file) => {
-                          setFeaturedImage(file.url);
+                          setFeaturedImage(file.dataUrl || file.url);
                           if (errorMessage) setErrorMessage('');
                         }}
                       />
