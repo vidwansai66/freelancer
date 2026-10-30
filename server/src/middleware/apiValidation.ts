@@ -15,11 +15,31 @@ const optionalEmail = z.union([email, z.literal('')]).optional();
 const url = z.union([
   z
     .string()
-    .url()
-    .refine((value) => /^https?:\/\//.test(value), 'Use an HTTP or HTTPS URL'),
+    .trim()
+    .refine(
+      (value) => !value || /^https?:\/\//i.test(value) || /^[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/.test(value),
+      'Use an HTTP or HTTPS URL',
+    )
+    .transform((value) => {
+      if (!value) return '';
+      if (!/^https?:\/\//i.test(value)) return `https://${value}`;
+      return value;
+    }),
   z.literal(''),
 ]);
-const image = z.union([url, z.string().regex(/^\/api\/files\/[a-zA-Z0-9_-]{1,64}$/)]);
+const image = z
+  .string()
+  .trim()
+  .refine(
+    (val) =>
+      val === '' ||
+      /^https?:\/\//i.test(val) ||
+      /^\/api\/files\//i.test(val) ||
+      /^\/images\//i.test(val) ||
+      /^\/assets\//i.test(val) ||
+      /^data:image\//i.test(val),
+    'Use an HTTP or HTTPS URL, /api/files path, or uploaded image data URL',
+  );
 const count = z.number().int().min(0).max(1000000);
 const money = z.number().min(0).max(100000000);
 const time = z.string().regex(/^(?:[01]\d|2[0-3]):[0-5]\d$/);
