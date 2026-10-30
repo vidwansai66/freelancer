@@ -26,6 +26,7 @@ const url = z.union([
       return value;
     }),
   z.literal(''),
+  z.null(),
 ]);
 const image = z
   .string()
@@ -34,10 +35,9 @@ const image = z
     (val) =>
       val === '' ||
       /^https?:\/\//i.test(val) ||
-      /^\/api\/files\//i.test(val) ||
-      /^\/images\//i.test(val) ||
-      /^\/assets\//i.test(val) ||
-      /^data:image\//i.test(val),
+      /^\/?(?:api\/files|images|assets)\//i.test(val) ||
+      /^data:image\//i.test(val) ||
+      /^[a-zA-Z0-9_\-\.\/]+\.(?:png|jpe?g|webp|gif|svg|avif)/i.test(val),
     'Use an HTTP or HTTPS URL, /api/files path, or uploaded image data URL',
   );
 const count = z.number().int().min(0).max(1000000);
@@ -94,7 +94,7 @@ const objects: Record<string, z.ZodObject<any>> = {
     title: text.min(1),
     slug: text.optional(),
     category: text.min(1),
-    clientName: text.min(1),
+    clientName: text.optional(),
     resultStat: text.optional(),
     featuredImage: image,
     galleryImages: z.array(image).max(30).optional(),

@@ -228,9 +228,9 @@ export const projectsApi = {
   create: async (data: any) => {
     let created: any = null;
     try {
-      const res = await api.post('/projects', data);
+      const res = await api.post('/projects', data, { skipGlobalError: true } as any);
       created = res.data?.data;
-    } catch (err) {
+    } catch (err: any) {
       created = {
         _id: `prj-${Date.now().toString(36)}`,
         title: data.title || 'New Project',
@@ -261,7 +261,7 @@ export const projectsApi = {
   update: async (id: string, data: any) => {
     let updated: any = null;
     try {
-      const res = await api.put(`/projects/${id}`, data);
+      const res = await api.put(`/projects/${id}`, data, { skipGlobalError: true } as any);
       updated = res.data?.data;
     } catch {}
 

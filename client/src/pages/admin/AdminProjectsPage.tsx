@@ -58,12 +58,10 @@ export const AdminProjectsPage: React.FC = () => {
     setTitle('');
     setCategory('Web Application');
     setClientName('');
-    setResultStat('Online orders up 40%');
-    setFeaturedImage(
-      'https://images.unsplash.com/photo-1460925895917-afdab827c52f?auto=format&fit=crop&w=1200&q=80',
-    );
+    setResultStat('');
+    setFeaturedImage('');
     setImageMode('upload');
-    setLiveUrl('https://example.com');
+    setLiveUrl('');
     setIsFeatured(true);
     setErrorMessage('');
     setSuccessMessage('');
@@ -451,6 +449,7 @@ export const AdminProjectsPage: React.FC = () => {
                       <UploadField
                         label="Upload screenshot from device"
                         visibility="public"
+                        currentName={featuredImage ? (featuredImage.startsWith('data:') ? 'Image uploaded from device' : 'Active screenshot') : ''}
                         onUploaded={(file) => {
                           setFeaturedImage(file.dataUrl || file.url);
                           if (errorMessage) setErrorMessage('');

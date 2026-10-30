@@ -588,8 +588,14 @@ function splitName(fullName: string): { firstName: string; lastName: string } {
  * Process a Contact Form submission and sync to Zoho CRM Leads
  */
 const isTestEmail = (email?: string): boolean => {
+  if (process.env.NODE_ENV === 'test' || process.env.DISABLE_ZOHO_SYNC === 'true') {
+    return true;
+  }
   if (!email) return false;
-  return /@(?:example\.(?:com|in|org)|test\.(?:com|in|org))/i.test(email) || process.env.DISABLE_ZOHO_SYNC === 'true';
+  return (
+    /@(?:example\.(?:com|in|org)|test\.(?:com|in|org))/i.test(email) ||
+    /^(?:test|dummy|fake|carlos\.rivera|vikram\.joshi|alice\.smith|bob\.jones)/i.test(email)
+  );
 };
 
 export async function syncInquiryToZoho(

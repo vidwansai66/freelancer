@@ -69,7 +69,11 @@ export function StudioSettingsPage() {
         onChange={(value) => change('contactEmail', value)}
         required
       />
-      <UploadField label="Upload logo" onUploaded={(file) => change('logoUrl', file.url)} />
+      <UploadField
+        label="Upload logo"
+        currentName={form.logoUrl ? 'Logo attached' : ''}
+        onUploaded={(file) => change('logoUrl', file.dataUrl || file.url)}
+      />
       <Field
         label="Logo URL"
         value={form.logoUrl || ''}

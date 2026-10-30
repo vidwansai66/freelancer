@@ -242,7 +242,8 @@ export const AdminBlogPage: React.FC = () => {
             <form onSubmit={handleSubmit} className="space-y-4">
               <UploadField
                 label="Article cover image"
-                onUploaded={(file) => setCoverImage(file.url)}
+                currentName={coverImage ? 'Cover image attached' : ''}
+                onUploaded={(file) => setCoverImage(file.dataUrl || file.url)}
               />
               <Field label="SEO title" value={seoTitle} onChange={setSeoTitle} />
               <Field label="SEO description" value={seoDescription} onChange={setSeoDescription} />

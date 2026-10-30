@@ -1,4 +1,4 @@
-import { useId, useState } from 'react';
+import { useId, useState, useEffect } from 'react';
 import { api } from '../../services/api';
 
 export const fieldClass =
@@ -158,16 +158,22 @@ const compressImage = async (imageFile: File): Promise<{ dataUrl: string; base64
 export function UploadField({
   label,
   visibility = 'public',
+  currentName,
   onUploaded,
 }: {
   label: string;
   visibility?: 'public' | 'private';
+  currentName?: string;
   onUploaded: (file: { fileId: string; token: string; filename: string; url: string; dataUrl?: string }) => void;
 }) {
   const id = useId();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
-  const [uploadedName, setUploadedName] = useState('');
+  const [uploadedName, setUploadedName] = useState(currentName || '');
+
+  useEffect(() => {
+    if (currentName) setUploadedName(currentName);
+  }, [currentName]);
 
   return (
     <div className="space-y-2">
@@ -220,12 +226,16 @@ export function UploadField({
               const { dataUrl, base64, mime } = await compressImage(file);
               let serverData: any = {};
               try {
-                const result = await api.post('/files', {
-                  filename: file.name,
-                  mime,
-                  base64,
-                  visibility,
-                });
+                const result = await api.post(
+                  '/files',
+                  {
+                    filename: file.name,
+                    mime,
+                    base64,
+                    visibility,
+                  },
+                  { skipGlobalError: true } as any,
+                );
                 serverData = result.data?.data || {};
               } catch {
                 // Serverless or offline fallback

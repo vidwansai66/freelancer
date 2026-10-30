@@ -193,6 +193,45 @@
   ],
   "projects": [
     {
+      "_id": "prj-b516e7ab",
+      "title": "New Test Studio Case Study",
+      "slug": "new-test-studio-case-study",
+      "category": "Web Application",
+      "clientName": "Test Client",
+      "resultStat": "Online orders up 40%",
+      "featuredImage": "data:image/jpeg;base64,/9j/4AAQSkZJRg==",
+      "galleryImages": [
+        "data:image/jpeg;base64,/9j/4AAQSkZJRg=="
+      ],
+      "liveUrl": "https://example.com",
+      "githubUrl": "",
+      "technologies": [
+        "Web Studio",
+        "React"
+      ],
+      "caseStudyMarkdown": "### Test",
+      "isFeatured": true,
+      "orderIndex": 0,
+      "createdAt": "2026-10-30T17:17:41.063Z"
+    },
+    {
+      "_id": "prj-55c57151",
+      "title": "Test Project",
+      "slug": "project-1793380635706",
+      "category": "Web App",
+      "clientName": "Client 1",
+      "resultStat": "",
+      "featuredImage": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==",
+      "galleryImages": [],
+      "liveUrl": "",
+      "githubUrl": "",
+      "technologies": [],
+      "caseStudyMarkdown": "",
+      "isFeatured": true,
+      "orderIndex": 0,
+      "createdAt": "2026-10-30T17:17:15.706Z"
+    },
+    {
       "_id": "prj-6e23dd3a",
       "title": "Farrow and Ball",
       "slug": "farrow-and-ball",

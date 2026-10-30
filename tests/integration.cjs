@@ -206,7 +206,7 @@ test('Zoho CRM diagnostic status endpoint returns accurate configuration metadat
 
 function getTestWeekday(offset = 10) {
   const d = new Date();
-  d.setDate(d.getDate() + offset + Math.floor(Math.random() * 600) + 30);
+  d.setDate(d.getDate() + offset + Math.floor(Math.random() * 500) + 120);
   while (d.getUTCDay() === 0 || d.getUTCDay() === 6) {
     d.setDate(d.getDate() + 1);
   }

@@ -174,19 +174,28 @@ export const QuotationPage: React.FC = () => {
                 visibility="private"
                 onUploaded={(file) => setAttachments((previous) => [...previous, file].slice(0, 5))}
               />
-              {attachments.map((file, index) => (
-                <div key={file.fileId}>
-                  {file.filename}{' '}
-                  <button
-                    type="button"
-                    onClick={() =>
-                      setAttachments((previous) => previous.filter((_, i) => i !== index))
-                    }
-                  >
-                    Remove
-                  </button>
+              {attachments.length > 0 && (
+                <div className="flex flex-wrap gap-2 pt-1">
+                  {attachments.map((file, index) => (
+                    <div
+                      key={file.fileId}
+                      className="inline-flex items-center gap-2 rounded-xl bg-card border border-border px-3 py-1.5 text-xs text-foreground shadow-xs"
+                    >
+                      <span className="font-medium truncate max-w-[200px]">{file.filename}</span>
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setAttachments((previous) => previous.filter((_, i) => i !== index))
+                        }
+                        className="text-muted-foreground hover:text-rose-500 transition-colors p-0.5"
+                        title="Remove file"
+                      >
+                        ✕
+                      </button>
+                    </div>
+                  ))}
                 </div>
-              ))}
+              )}
               {error && (
                 <div className="flex items-center gap-2 rounded-xl border border-rose-500/40 bg-rose-500/10 p-4 text-xs text-rose-300">
                   <AlertCircle className="h-4 w-4 shrink-0" />
