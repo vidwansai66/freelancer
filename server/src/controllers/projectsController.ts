@@ -70,11 +70,13 @@ export const createProject = async (req: Request, res: Response): Promise<void> 
       galleryImages?.[0] ||
       'https://images.unsplash.com/photo-1460925895917-afdab827c52f?auto=format&fit=crop&w=1200&q=80';
 
-    const finalSlug = slug ? slugify(slug) : slugify(effectiveTitle);
+    let finalSlug = slug ? slugify(slug) : slugify(effectiveTitle);
+    if (!finalSlug) {
+      finalSlug = `project-${Date.now().toString(36)}`;
+    }
     const existing = contentStore.getProjectBySlug(finalSlug);
     if (existing) {
-      sendError(res, `A project with slug "${finalSlug}" already exists.`, 409);
-      return;
+      finalSlug = `${finalSlug}-${Date.now().toString(36)}`;
     }
 
     const project = contentStore.addProject({

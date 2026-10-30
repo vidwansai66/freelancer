@@ -598,4 +598,25 @@ html.lenis body {
   box-shadow: 0 6px 14px rgba(32, 60, 61, 0.25) !important;
 }
 
+/* Custom Scrollbar for Admin Portal */
+.admin-portal ::-webkit-scrollbar {
+  width: 7px;
+  height: 7px;
+}
+
+.admin-portal ::-webkit-scrollbar-track {
+  background: #F6F4F0 !important;
+}
+
+.admin-portal ::-webkit-scrollbar-thumb {
+  background: #203C3D !important;
+  border-radius: 9999px !important;
+  border: 1.5px solid #FEDAB8 !important;
+}
+
+.admin-portal ::-webkit-scrollbar-thumb:hover {
+  background: #142627 !important;
+}
+
+
 

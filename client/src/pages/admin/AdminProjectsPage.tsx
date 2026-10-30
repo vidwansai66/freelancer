@@ -1,5 +1,16 @@
 import React, { useEffect, useState } from 'react';
-import { Plus, Edit2, Trash2, X, ExternalLink, Image as ImageIcon, Sparkles, Check } from 'lucide-react';
+import {
+  Plus,
+  Edit2,
+  Trash2,
+  X,
+  ExternalLink,
+  Image as ImageIcon,
+  Sparkles,
+  Check,
+  AlertCircle,
+  Loader2,
+} from 'lucide-react';
 import { Project } from '../../types';
 import { projectsApi, api } from '../../services/api';
 import { UploadField, Pagination as ListPages } from '../../components/common/Forms';
@@ -22,6 +33,8 @@ export const AdminProjectsPage: React.FC = () => {
   const [liveUrl, setLiveUrl] = useState('');
   const [isFeatured, setIsFeatured] = useState(true);
   const [submitting, setSubmitting] = useState(false);
+  const [errorMessage, setErrorMessage] = useState('');
+  const [successMessage, setSuccessMessage] = useState('');
 
   const fetchProjects = () => {
     setLoading(true);
@@ -50,6 +63,8 @@ export const AdminProjectsPage: React.FC = () => {
     );
     setLiveUrl('https://example.com');
     setIsFeatured(true);
+    setErrorMessage('');
+    setSuccessMessage('');
     setModalOpen(true);
   };
 
@@ -62,12 +77,25 @@ export const AdminProjectsPage: React.FC = () => {
     setFeaturedImage(p.featuredImage);
     setLiveUrl(p.liveUrl || '');
     setIsFeatured(p.isFeatured !== false);
+    setErrorMessage('');
+    setSuccessMessage('');
     setModalOpen(true);
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!title.trim() || !featuredImage.trim()) return;
+    setErrorMessage('');
+    setSuccessMessage('');
+
+    if (!title.trim()) {
+      setErrorMessage('Please enter a Project Title.');
+      return;
+    }
+
+    if (!featuredImage.trim()) {
+      setErrorMessage('Please provide a Project Screenshot or Image URL.');
+      return;
+    }
 
     setSubmitting(true);
     const payload = {
@@ -90,10 +118,16 @@ export const AdminProjectsPage: React.FC = () => {
       } else {
         await projectsApi.create(payload);
       }
-      setModalOpen(false);
-      fetchProjects();
-    } catch (err) {
+      setSuccessMessage('Case study saved successfully!');
+      setTimeout(() => {
+        setModalOpen(false);
+        fetchProjects();
+      }, 400);
+    } catch (err: any) {
       console.error(err);
+      setErrorMessage(
+        err.response?.data?.error || err.message || 'Failed to save case study. Please try again.',
+      );
     } finally {
       setSubmitting(false);
     }
@@ -249,178 +283,224 @@ export const AdminProjectsPage: React.FC = () => {
       <ListPages page={listPage} totalPages={listPages} onChange={setListPage} />
 
       {/* ======================================================== */}
-      {/* SIMPLIFIED CASE STUDY MODAL (Fixed header, scroll body)  */}
+      {/* SIMPLIFIED CASE STUDY MODAL (Fixed header, smooth scroll) */}
       {/* ======================================================== */}
       {modalOpen && (
         <div
           role="dialog"
           aria-modal="true"
           aria-label="Case Study Modal"
-          className="fixed inset-0 z-50 flex items-center justify-center bg-[#142627]/85 backdrop-blur-md p-4 sm:p-6 overflow-hidden animate-in fade-in duration-200"
+          data-lenis-prevent
+          className="fixed inset-0 z-50 flex items-center justify-center bg-[#142627]/85 backdrop-blur-md p-3 sm:p-6 overflow-y-auto animate-in fade-in duration-200"
         >
-          <div className="w-full max-w-lg rounded-3xl bg-white border-2 border-[#FEDAB8] shadow-2xl flex flex-col max-h-[90vh] overflow-hidden">
-            {/* Sticky Header with Title and Close Button */}
-            <div className="p-5 px-6 border-b border-[#203C3D]/10 bg-[#203C3D] text-[#FEDAB8] flex items-center justify-between shrink-0">
-              <div className="flex items-center gap-2.5">
-                <div className="p-1.5 rounded-lg bg-[#FEDAB8] text-[#203C3D]">
-                  <Sparkles className="h-4 w-4" />
+          <div
+            data-lenis-prevent
+            className="w-full max-w-lg rounded-3xl bg-white border-2 border-[#FEDAB8] shadow-2xl flex flex-col max-h-[90vh] my-auto overscroll-contain"
+          >
+            <form
+              onSubmit={handleSubmit}
+              className="flex flex-col h-full max-h-[90vh] min-h-0"
+            >
+              {/* Sticky Header with Title and Close Button */}
+              <div className="p-5 px-6 border-b border-[#203C3D]/10 bg-[#203C3D] text-[#FEDAB8] flex items-center justify-between shrink-0 rounded-t-3xl">
+                <div className="flex items-center gap-2.5">
+                  <div className="p-1.5 rounded-lg bg-[#FEDAB8] text-[#203C3D]">
+                    <Sparkles className="h-4 w-4" />
+                  </div>
+                  <h3 className="text-base font-black tracking-tight text-[#FEDAB8]">
+                    {editingId ? 'Edit Case Study' : 'Add New Case Study'}
+                  </h3>
                 </div>
-                <h3 className="text-base font-black tracking-tight text-[#FEDAB8]">
-                  {editingId ? 'Edit Case Study' : 'Add New Case Study'}
-                </h3>
+                <button
+                  type="button"
+                  data-dialog-close
+                  aria-label="Close"
+                  onClick={() => setModalOpen(false)}
+                  className="p-1.5 rounded-xl text-[#FEDAB8]/80 hover:text-[#FEDAB8] hover:bg-white/10 transition-colors"
+                >
+                  <X className="h-5 w-5" />
+                </button>
               </div>
-              <button
-                type="button"
-                data-dialog-close
-                aria-label="Close"
-                onClick={() => setModalOpen(false)}
-                className="p-1.5 rounded-xl text-[#FEDAB8]/80 hover:text-[#FEDAB8] hover:bg-white/10 transition-colors"
+
+              {/* Scrollable Form Body with min-h-0 and overscroll-contain */}
+              <div
+                data-lenis-prevent
+                className="flex-1 min-h-0 overflow-y-auto p-6 space-y-4 overscroll-contain"
               >
-                <X className="h-5 w-5" />
-              </button>
-            </div>
+                {/* Validation / Error Banner */}
+                {errorMessage && (
+                  <div className="p-3.5 rounded-xl bg-rose-100 border-2 border-rose-300 text-rose-900 text-xs font-black flex items-center gap-2 animate-in fade-in">
+                    <AlertCircle className="h-4 w-4 shrink-0 text-rose-700" />
+                    <span>{errorMessage}</span>
+                  </div>
+                )}
 
-            {/* Scrollable Form Body (Only essential and useful parameters) */}
-            <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto p-6 space-y-4">
-              {/* Project Title */}
-              <div>
-                <label className="block text-xs font-black text-[#203C3D] mb-1 uppercase tracking-wider">
-                  Project Title *
-                </label>
-                <input
-                  type="text"
-                  required
-                  value={title}
-                  onChange={(e) => setTitle(e.target.value)}
-                  placeholder="e.g. Bean &amp; Bloom Coffee, Fintech Dashboard"
-                  className="w-full rounded-xl border-2 border-[#203C3D]/25 bg-white px-3.5 py-2.5 text-xs text-[#111E1F] font-bold focus:outline-none focus:border-[#203C3D] focus:ring-2 focus:ring-[#FEDAB8]"
-                />
-              </div>
+                {/* Success Banner */}
+                {successMessage && (
+                  <div className="p-3.5 rounded-xl bg-emerald-100 border-2 border-emerald-300 text-emerald-900 text-xs font-black flex items-center gap-2 animate-in fade-in">
+                    <Check className="h-4 w-4 shrink-0 text-emerald-700" />
+                    <span>{successMessage}</span>
+                  </div>
+                )}
 
-              {/* Category & Outcome in 2 Columns */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                {/* Project Title */}
                 <div>
                   <label className="block text-xs font-black text-[#203C3D] mb-1 uppercase tracking-wider">
-                    Category *
+                    Project Title *
                   </label>
                   <input
                     type="text"
                     required
-                    value={category}
-                    onChange={(e) => setCategory(e.target.value)}
-                    placeholder="e.g. E-Commerce, SaaS, Mobile"
+                    autoFocus
+                    value={title}
+                    onChange={(e) => {
+                      setTitle(e.target.value);
+                      if (errorMessage) setErrorMessage('');
+                    }}
+                    placeholder="Enter project title..."
                     className="w-full rounded-xl border-2 border-[#203C3D]/25 bg-white px-3.5 py-2.5 text-xs text-[#111E1F] font-bold focus:outline-none focus:border-[#203C3D] focus:ring-2 focus:ring-[#FEDAB8]"
                   />
                 </div>
-                <div>
-                  <label className="block text-xs font-black text-[#203C3D] mb-1 uppercase tracking-wider">
-                    Key Outcome / Metric
-                  </label>
-                  <input
-                    type="text"
-                    value={resultStat}
-                    onChange={(e) => setResultStat(e.target.value)}
-                    placeholder="e.g. Online orders up 40%"
-                    className="w-full rounded-xl border-2 border-[#203C3D]/25 bg-white px-3.5 py-2.5 text-xs text-[#111E1F] font-bold focus:outline-none focus:border-[#203C3D] focus:ring-2 focus:ring-[#FEDAB8]"
-                  />
-                </div>
-              </div>
 
-              {/* Screenshot / Project Image */}
-              <div className="rounded-2xl border-2 border-dashed border-[#203C3D]/30 p-4 bg-[#FBF9F6] space-y-3">
-                <div className="flex items-center justify-between">
-                  <span className="text-xs font-black text-[#203C3D] uppercase tracking-wider flex items-center gap-1.5">
-                    <ImageIcon className="h-4 w-4 text-[#203C3D]" /> Project Screenshot / Image *
-                  </span>
-                  {featuredImage && (
-                    <span className="text-[10px] font-black text-[#203C3D] bg-[#FEDAB8] px-2 py-0.5 rounded-md">
-                      Preview Ready
+                {/* Category & Outcome in 2 Columns */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-xs font-black text-[#203C3D] mb-1 uppercase tracking-wider">
+                      Category *
+                    </label>
+                    <input
+                      type="text"
+                      required
+                      value={category}
+                      onChange={(e) => setCategory(e.target.value)}
+                      placeholder="e.g. E-Commerce, SaaS, Mobile"
+                      className="w-full rounded-xl border-2 border-[#203C3D]/25 bg-white px-3.5 py-2.5 text-xs text-[#111E1F] font-bold focus:outline-none focus:border-[#203C3D] focus:ring-2 focus:ring-[#FEDAB8]"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-black text-[#203C3D] mb-1 uppercase tracking-wider">
+                      Key Outcome / Metric
+                    </label>
+                    <input
+                      type="text"
+                      value={resultStat}
+                      onChange={(e) => setResultStat(e.target.value)}
+                      placeholder="e.g. Online orders up 40%"
+                      className="w-full rounded-xl border-2 border-[#203C3D]/25 bg-white px-3.5 py-2.5 text-xs text-[#111E1F] font-bold focus:outline-none focus:border-[#203C3D] focus:ring-2 focus:ring-[#FEDAB8]"
+                    />
+                  </div>
+                </div>
+
+                {/* Screenshot / Project Image */}
+                <div className="rounded-2xl border-2 border-dashed border-[#203C3D]/30 p-4 bg-[#FBF9F6] space-y-3">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-black text-[#203C3D] uppercase tracking-wider flex items-center gap-1.5">
+                      <ImageIcon className="h-4 w-4 text-[#203C3D]" /> Project Screenshot / Image *
                     </span>
+                    {featuredImage && (
+                      <span className="text-[10px] font-black text-[#203C3D] bg-[#FEDAB8] px-2 py-0.5 rounded-md">
+                        Preview Ready
+                      </span>
+                    )}
+                  </div>
+
+                  <UploadField
+                    label="Upload image from computer"
+                    onUploaded={(file) => {
+                      setFeaturedImage(file.url);
+                      if (errorMessage) setErrorMessage('');
+                    }}
+                  />
+
+                  <div className="pt-1">
+                    <label className="block text-[11px] font-bold text-[#4D6768] mb-1">
+                      Or paste Image / Screenshot URL:
+                    </label>
+                    <input
+                      type="url"
+                      required
+                      value={featuredImage}
+                      onChange={(e) => {
+                        setFeaturedImage(e.target.value);
+                        if (errorMessage) setErrorMessage('');
+                      }}
+                      placeholder="https://images.unsplash.com/..."
+                      className="w-full rounded-xl border-2 border-[#203C3D]/25 bg-white px-3.5 py-2 text-xs text-[#111E1F] font-bold focus:outline-none focus:border-[#203C3D] focus:ring-2 focus:ring-[#FEDAB8]"
+                    />
+                  </div>
+
+                  {featuredImage && (
+                    <div className="mt-2">
+                      <img
+                        src={featuredImage}
+                        alt="Screenshot preview"
+                        className="h-28 w-full object-cover rounded-xl border border-[#203C3D]/20 shadow-sm"
+                      />
+                    </div>
                   )}
                 </div>
 
-                <UploadField
-                  label="Upload image from computer"
-                  onUploaded={(file) => setFeaturedImage(file.url)}
-                />
-
-                <div className="pt-1">
-                  <label className="block text-[11px] font-bold text-[#4D6768] mb-1">
-                    Or paste Image / Screenshot URL:
+                {/* Live Project URL */}
+                <div>
+                  <label className="block text-xs font-black text-[#203C3D] mb-1 uppercase tracking-wider">
+                    Live Website / Demo URL
                   </label>
                   <input
                     type="url"
-                    required
-                    value={featuredImage}
-                    onChange={(e) => setFeaturedImage(e.target.value)}
-                    placeholder="https://images.unsplash.com/..."
-                    className="w-full rounded-xl border-2 border-[#203C3D]/25 bg-white px-3.5 py-2 text-xs text-[#111E1F] font-bold focus:outline-none focus:border-[#203C3D] focus:ring-2 focus:ring-[#FEDAB8]"
+                    value={liveUrl}
+                    onChange={(e) => setLiveUrl(e.target.value)}
+                    placeholder="https://yourclientwebsite.com"
+                    className="w-full rounded-xl border-2 border-[#203C3D]/25 bg-white px-3.5 py-2.5 text-xs text-[#111E1F] font-bold focus:outline-none focus:border-[#203C3D] focus:ring-2 focus:ring-[#FEDAB8]"
                   />
                 </div>
 
-                {featuredImage && (
-                  <div className="mt-2">
-                    <img
-                      src={featuredImage}
-                      alt="Screenshot preview"
-                      className="h-28 w-full object-cover rounded-xl border border-[#203C3D]/20 shadow-sm"
-                    />
-                  </div>
-                )}
+                {/* Feature on Homepage Toggle */}
+                <div className="flex items-center gap-3 pt-2">
+                  <button
+                    type="button"
+                    onClick={() => setIsFeatured(!isFeatured)}
+                    className={`h-5 w-5 rounded-md flex items-center justify-center border-2 transition-all ${
+                      isFeatured
+                        ? 'bg-[#203C3D] border-[#203C3D] text-[#FEDAB8]'
+                        : 'bg-white border-[#203C3D]/40'
+                    }`}
+                  >
+                    {isFeatured && <Check className="h-3.5 w-3.5 stroke-[3]" />}
+                  </button>
+                  <span className="text-xs font-black text-[#203C3D]">
+                    Showcase on Home Page (Featured Project)
+                  </span>
+                </div>
               </div>
 
-              {/* Live Project URL */}
-              <div>
-                <label className="block text-xs font-black text-[#203C3D] mb-1 uppercase tracking-wider">
-                  Live Website / Demo URL
-                </label>
-                <input
-                  type="url"
-                  value={liveUrl}
-                  onChange={(e) => setLiveUrl(e.target.value)}
-                  placeholder="https://yourclientwebsite.com"
-                  className="w-full rounded-xl border-2 border-[#203C3D]/25 bg-white px-3.5 py-2.5 text-xs text-[#111E1F] font-bold focus:outline-none focus:border-[#203C3D] focus:ring-2 focus:ring-[#FEDAB8]"
-                />
-              </div>
-
-              {/* Feature on Homepage Toggle */}
-              <div className="flex items-center gap-3 pt-2">
+              {/* Sticky Footer */}
+              <div className="p-4 px-6 border-t border-[#203C3D]/10 bg-[#FAF7F4] flex items-center justify-end gap-3 shrink-0 rounded-b-3xl">
                 <button
                   type="button"
-                  onClick={() => setIsFeatured(!isFeatured)}
-                  className={`h-5 w-5 rounded-md flex items-center justify-center border-2 transition-all ${
-                    isFeatured
-                      ? 'bg-[#203C3D] border-[#203C3D] text-[#FEDAB8]'
-                      : 'bg-white border-[#203C3D]/40'
-                  }`}
+                  data-dialog-close
+                  onClick={() => setModalOpen(false)}
+                  className="rounded-xl px-4 py-2 text-xs font-black text-[#203C3D] hover:bg-[#203C3D]/10 transition-colors"
                 >
-                  {isFeatured && <Check className="h-3.5 w-3.5 stroke-[3]" />}
+                  Cancel
                 </button>
-                <span className="text-xs font-black text-[#203C3D]">
-                  Showcase on Home Page (Featured Project)
-                </span>
+                <button
+                  type="submit"
+                  disabled={submitting}
+                  className="rounded-xl bg-[#203C3D] hover:bg-[#162A2B] px-6 py-2.5 text-xs font-black text-[#FEDAB8] shadow-md shadow-[#203C3D]/20 hover:scale-[1.02] active:scale-[0.98] transition-all disabled:opacity-50 flex items-center gap-2"
+                >
+                  {submitting ? (
+                    <>
+                      <Loader2 className="h-4 w-4 animate-spin text-[#FEDAB8]" />
+                      Saving...
+                    </>
+                  ) : editingId ? (
+                    'Update Case Study'
+                  ) : (
+                    'Save Case Study'
+                  )}
+                </button>
               </div>
             </form>
-
-            {/* Sticky Footer */}
-            <div className="p-4 px-6 border-t border-[#203C3D]/10 bg-[#FAF7F4] flex items-center justify-end gap-3 shrink-0">
-              <button
-                type="button"
-                data-dialog-close
-                onClick={() => setModalOpen(false)}
-                className="rounded-xl px-4 py-2 text-xs font-black text-[#203C3D] hover:bg-[#203C3D]/10 transition-colors"
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                onClick={handleSubmit}
-                disabled={submitting}
-                className="rounded-xl bg-[#203C3D] hover:bg-[#162A2B] px-6 py-2.5 text-xs font-black text-[#FEDAB8] shadow-md shadow-[#203C3D]/20 hover:scale-[1.02] active:scale-[0.98] transition-all disabled:opacity-50"
-              >
-                {submitting ? 'Saving...' : editingId ? 'Update Case Study' : 'Save Case Study'}
-              </button>
-            </div>
           </div>
         </div>
       )}
