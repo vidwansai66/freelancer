@@ -84,7 +84,7 @@ router.post('/', formSubmissionRateLimiter, async (req, res) => {
     }
   };
 
-  if (req.body.visibility === 'public' || req.headers.authorization) {
+  if (req.headers.authorization) {
     await authenticateAdmin(req, res, () => {
       void save();
     });

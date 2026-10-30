@@ -30,6 +30,7 @@ export const AdminProjectsPage: React.FC = () => {
   const [clientName, setClientName] = useState('');
   const [resultStat, setResultStat] = useState('');
   const [featuredImage, setFeaturedImage] = useState('');
+  const [imageMode, setImageMode] = useState<'upload' | 'url'>('upload');
   const [liveUrl, setLiveUrl] = useState('');
   const [isFeatured, setIsFeatured] = useState(true);
   const [submitting, setSubmitting] = useState(false);
@@ -61,6 +62,7 @@ export const AdminProjectsPage: React.FC = () => {
     setFeaturedImage(
       'https://images.unsplash.com/photo-1460925895917-afdab827c52f?auto=format&fit=crop&w=1200&q=80',
     );
+    setImageMode('upload');
     setLiveUrl('https://example.com');
     setIsFeatured(true);
     setErrorMessage('');
@@ -75,6 +77,7 @@ export const AdminProjectsPage: React.FC = () => {
     setClientName(p.clientName || p.title);
     setResultStat(p.resultStat || '');
     setFeaturedImage(p.featuredImage);
+    setImageMode(p.featuredImage?.startsWith('/api/files/') ? 'upload' : 'url');
     setLiveUrl(p.liveUrl || '');
     setIsFeatured(p.isFeatured !== false);
     setErrorMessage('');
@@ -93,8 +96,13 @@ export const AdminProjectsPage: React.FC = () => {
     }
 
     if (!featuredImage.trim()) {
-      setErrorMessage('Please provide a Project Screenshot or Image URL.');
+      setErrorMessage('Please upload a screenshot or enter an image link.');
       return;
+    }
+
+    let cleanLiveUrl = liveUrl.trim();
+    if (cleanLiveUrl && !/^https?:\/\//i.test(cleanLiveUrl)) {
+      cleanLiveUrl = `https://${cleanLiveUrl}`;
     }
 
     setSubmitting(true);
@@ -105,7 +113,7 @@ export const AdminProjectsPage: React.FC = () => {
       resultStat: resultStat.trim() || 'Live in Production',
       featuredImage: featuredImage.trim(),
       galleryImages: [featuredImage.trim()],
-      liveUrl: liveUrl.trim(),
+      liveUrl: cleanLiveUrl,
       githubUrl: '',
       technologies: ['Web Studio', 'React'],
       caseStudyMarkdown: `### ${title.trim()}\n\n${resultStat.trim() || 'Modern interactive website built for exceptional user performance.'}`,
@@ -214,6 +222,10 @@ export const AdminProjectsPage: React.FC = () => {
                           src={p.featuredImage}
                           alt={p.title}
                           className="h-12 w-16 rounded-xl object-cover border border-[#203C3D]/15 bg-[#FAF7F2] shrink-0"
+                          onError={(e) => {
+                            (e.currentTarget as HTMLImageElement).src =
+                              'https://images.unsplash.com/photo-1460925895917-afdab827c52f?auto=format&fit=crop&w=1200&q=80';
+                          }}
                         />
                         <div>
                           <p className="font-black text-[#111E1F] text-sm">{p.title}</p>
@@ -357,7 +369,7 @@ export const AdminProjectsPage: React.FC = () => {
                       setTitle(e.target.value);
                       if (errorMessage) setErrorMessage('');
                     }}
-                    placeholder="Enter project title..."
+                    placeholder="Enter project title (e.g. Bean &amp; Bloom)"
                     className="w-full rounded-xl border-2 border-[#203C3D]/25 bg-white px-3.5 py-2.5 text-xs text-[#111E1F] font-bold focus:outline-none focus:border-[#203C3D] focus:ring-2 focus:ring-[#FEDAB8]"
                   />
                 </div>
@@ -391,51 +403,98 @@ export const AdminProjectsPage: React.FC = () => {
                   </div>
                 </div>
 
-                {/* Screenshot / Project Image */}
+                {/* Unified Screenshot / Project Image Section */}
                 <div className="rounded-2xl border-2 border-dashed border-[#203C3D]/30 p-4 bg-[#FBF9F6] space-y-3">
                   <div className="flex items-center justify-between">
                     <span className="text-xs font-black text-[#203C3D] uppercase tracking-wider flex items-center gap-1.5">
                       <ImageIcon className="h-4 w-4 text-[#203C3D]" /> Project Screenshot / Image *
                     </span>
                     {featuredImage && (
-                      <span className="text-[10px] font-black text-[#203C3D] bg-[#FEDAB8] px-2 py-0.5 rounded-md">
-                        Preview Ready
+                      <span className="text-[10px] font-black text-[#203C3D] bg-[#FEDAB8] px-2.5 py-0.5 rounded-full border border-[#F8C89A]">
+                        ✓ Image Ready
                       </span>
                     )}
                   </div>
 
-                  <UploadField
-                    label="Upload image from computer"
-                    onUploaded={(file) => {
-                      setFeaturedImage(file.url);
-                      if (errorMessage) setErrorMessage('');
-                    }}
-                  />
-
-                  <div className="pt-1">
-                    <label className="block text-[11px] font-bold text-[#4D6768] mb-1">
-                      Or paste Image / Screenshot URL:
-                    </label>
-                    <input
-                      type="url"
-                      required
-                      value={featuredImage}
-                      onChange={(e) => {
-                        setFeaturedImage(e.target.value);
-                        if (errorMessage) setErrorMessage('');
-                      }}
-                      placeholder="https://images.unsplash.com/..."
-                      className="w-full rounded-xl border-2 border-[#203C3D]/25 bg-white px-3.5 py-2 text-xs text-[#111E1F] font-bold focus:outline-none focus:border-[#203C3D] focus:ring-2 focus:ring-[#FEDAB8]"
-                    />
+                  {/* Mode Selector Tabs */}
+                  <div className="flex rounded-xl bg-[#203C3D]/10 p-1 gap-1">
+                    <button
+                      type="button"
+                      onClick={() => setImageMode('upload')}
+                      className={`flex-1 py-1.5 rounded-lg text-xs font-black transition-all ${
+                        imageMode === 'upload'
+                          ? 'bg-[#203C3D] text-[#FEDAB8] shadow-xs'
+                          : 'text-[#203C3D] hover:bg-white/60'
+                      }`}
+                    >
+                      Upload File
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setImageMode('url')}
+                      className={`flex-1 py-1.5 rounded-lg text-xs font-black transition-all ${
+                        imageMode === 'url'
+                          ? 'bg-[#203C3D] text-[#FEDAB8] shadow-xs'
+                          : 'text-[#203C3D] hover:bg-white/60'
+                      }`}
+                    >
+                      Or Paste Image Link
+                    </button>
                   </div>
 
+                  {imageMode === 'upload' ? (
+                    <div className="pt-1">
+                      <UploadField
+                        label="Upload screenshot from device"
+                        visibility="public"
+                        onUploaded={(file) => {
+                          setFeaturedImage(file.url);
+                          if (errorMessage) setErrorMessage('');
+                        }}
+                      />
+                    </div>
+                  ) : (
+                    <div className="pt-1 space-y-1">
+                      <label className="block text-[11px] font-bold text-[#4D6768]">
+                        Image Link or URL:
+                      </label>
+                      <input
+                        type="text"
+                        value={featuredImage}
+                        onChange={(e) => {
+                          setFeaturedImage(e.target.value.trim());
+                          if (errorMessage) setErrorMessage('');
+                        }}
+                        placeholder="https://images.unsplash.com/... or /api/files/..."
+                        className="w-full rounded-xl border-2 border-[#203C3D]/25 bg-white px-3.5 py-2 text-xs text-[#111E1F] font-bold focus:outline-none focus:border-[#203C3D] focus:ring-2 focus:ring-[#FEDAB8]"
+                      />
+                    </div>
+                  )}
+
+                  {/* Live Image Preview */}
                   {featuredImage && (
-                    <div className="mt-2">
+                    <div className="mt-2 relative rounded-xl overflow-hidden border-2 border-[#203C3D]/20 shadow-sm bg-black/5">
                       <img
                         src={featuredImage}
                         alt="Screenshot preview"
-                        className="h-28 w-full object-cover rounded-xl border border-[#203C3D]/20 shadow-sm"
+                        className="h-32 w-full object-cover"
+                        onError={(e) => {
+                          (e.currentTarget as HTMLImageElement).src =
+                            'https://images.unsplash.com/photo-1460925895917-afdab827c52f?auto=format&fit=crop&w=1200&q=80';
+                        }}
                       />
+                      <div className="absolute top-2 right-2 flex items-center gap-2">
+                        <span className="text-[10px] font-black text-[#203C3D] bg-white/95 px-2 py-0.5 rounded-md shadow-xs">
+                          Active Preview
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => setFeaturedImage('')}
+                          className="text-[10px] font-black text-rose-800 bg-rose-100 hover:bg-rose-200 border border-rose-300 px-2 py-0.5 rounded-md shadow-xs transition-colors"
+                        >
+                          Remove
+                        </button>
+                      </div>
                     </div>
                   )}
                 </div>
@@ -446,10 +505,10 @@ export const AdminProjectsPage: React.FC = () => {
                     Live Website / Demo URL
                   </label>
                   <input
-                    type="url"
+                    type="text"
                     value={liveUrl}
                     onChange={(e) => setLiveUrl(e.target.value)}
-                    placeholder="https://yourclientwebsite.com"
+                    placeholder="e.g. https://www.farrow-ball.com or farrow-ball.com"
                     className="w-full rounded-xl border-2 border-[#203C3D]/25 bg-white px-3.5 py-2.5 text-xs text-[#111E1F] font-bold focus:outline-none focus:border-[#203C3D] focus:ring-2 focus:ring-[#FEDAB8]"
                   />
                 </div>

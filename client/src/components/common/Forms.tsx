@@ -93,62 +93,97 @@ export function UploadField({
   onUploaded: (file: { fileId: string; token: string; filename: string; url: string }) => void;
 }) {
   const id = useId();
-  const [busy, setBusy] = useState(false),
-    [error, setError] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+  const [uploadedName, setUploadedName] = useState('');
+
   return (
     <div className="space-y-2">
-      <label htmlFor={id} className="block text-sm">
+      <label htmlFor={id} className="block text-xs font-black text-[#203C3D] uppercase tracking-wider">
         {label}
       </label>
-      <input
-        id={id}
-        type="file"
-        accept={
-          visibility === 'public'
-            ? 'image/png,image/jpeg,image/webp'
-            : 'image/png,image/jpeg,image/webp,application/pdf'
-        }
-        disabled={busy}
-        onChange={async (e) => {
-          const file = e.target.files?.[0];
-          if (!file) return;
-          setError('');
-          if (file.size > 5 * 1024 * 1024) {
-            setError('Choose a file smaller than 5 MB.');
-            e.target.value = '';
-            return;
+      <div className="flex flex-wrap items-center gap-3">
+        <label
+          htmlFor={id}
+          className={`cursor-pointer inline-flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-black transition-all border select-none ${
+            busy
+              ? 'bg-zinc-200 text-zinc-500 border-zinc-300 cursor-not-allowed'
+              : 'bg-[#203C3D] hover:bg-[#162A2B] text-[#FEDAB8] border-[#FEDAB8]/30 shadow-sm hover:scale-[1.02] active:scale-[0.98]'
+          }`}
+        >
+          {busy ? (
+            <>
+              <span className="h-3.5 w-3.5 border-2 border-zinc-400 border-t-transparent rounded-full animate-spin" />
+              <span>Uploading…</span>
+            </>
+          ) : (
+            <>
+              <svg className="h-4 w-4 text-[#FEDAB8]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
+              </svg>
+              <span>{uploadedName ? 'Change Selected File' : 'Choose File from Computer'}</span>
+            </>
+          )}
+        </label>
+        <input
+          id={id}
+          type="file"
+          accept={
+            visibility === 'public'
+              ? 'image/png,image/jpeg,image/webp'
+              : 'image/png,image/jpeg,image/webp,application/pdf'
           }
-          setBusy(true);
-          try {
-            const base64 = await new Promise<string>((resolve, reject) => {
-              const reader = new FileReader();
-              reader.onload = () => resolve(String(reader.result).split(',')[1]);
-              reader.onerror = reject;
-              reader.readAsDataURL(file);
-            });
-            const result = await api.post('/files', {
-              filename: file.name,
-              mime: file.type,
-              base64,
-              visibility,
-            });
-            onUploaded(result.data.data);
-          } catch (err: any) {
-            setError(err.response?.data?.error || 'Upload failed.');
-          } finally {
-            setBusy(false);
-            e.target.value = '';
-          }
-        }}
-        className={fieldClass}
-      />
-      <p className="text-xs text-muted-foreground">
-        {busy
-          ? 'Uploading…'
-          : 'PNG, JPEG, WebP' + (visibility === 'private' ? ' or PDF' : '') + ' · maximum 5 MB'}
+          disabled={busy}
+          className="hidden"
+          onChange={async (e) => {
+            const file = e.target.files?.[0];
+            if (!file) return;
+            setError('');
+            if (file.size > 5 * 1024 * 1024) {
+              setError('Choose a file smaller than 5 MB.');
+              return;
+            }
+            setBusy(true);
+            try {
+              const base64 = await new Promise<string>((resolve, reject) => {
+                const reader = new FileReader();
+                reader.onload = () => resolve(String(reader.result).split(',')[1]);
+                reader.onerror = reject;
+                reader.readAsDataURL(file);
+              });
+              const result = await api.post('/files', {
+                filename: file.name,
+                mime: file.type,
+                base64,
+                visibility,
+              });
+              setUploadedName(file.name);
+              onUploaded(result.data.data);
+            } catch (err: any) {
+              setError(err.response?.data?.error || 'Upload failed. Please try another file.');
+            } finally {
+              setBusy(false);
+            }
+          }}
+        />
+        <div className="flex-1 min-w-[140px] truncate">
+          {uploadedName ? (
+            <span className="inline-flex items-center gap-1.5 text-xs font-black text-emerald-900 bg-emerald-100 border border-emerald-300 px-3 py-1 rounded-xl shadow-xs">
+              <svg className="h-3.5 w-3.5 text-emerald-700 stroke-[3]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
+              </svg>
+              <span className="truncate">{uploadedName}</span>
+            </span>
+          ) : (
+            <span className="text-xs text-[#4D6768] font-bold">No file selected yet</span>
+          )}
+        </div>
+      </div>
+      <p className="text-[11px] text-[#7A9394] font-semibold">
+        PNG, JPEG, WebP{visibility === 'private' ? ' or PDF' : ''} · maximum 5 MB
       </p>
       {error && (
-        <p role="alert" className="text-rose-300">
+        <p role="alert" className="text-xs font-black text-rose-600 bg-rose-50 p-2 rounded-lg border border-rose-200">
           {error}
         </p>
       )}
