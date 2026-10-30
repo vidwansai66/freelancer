@@ -24,8 +24,8 @@ export function TestimonialsEditorPage() {
     const response = await api.get('/testimonials/admin/all', {
       params: { page, search, limit: 20 },
     });
-    setRows(response.data.data);
-    setPages(response.data.meta.totalPages);
+    setRows(response.data.data || []);
+    setPages(response.data.meta?.totalPages || 1);
   };
   useEffect(() => {
     load();

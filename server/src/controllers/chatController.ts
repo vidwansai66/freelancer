@@ -3,8 +3,11 @@ import { sendSuccess, sendError } from '../utils/apiResponse';
 import { answerStudioQuestion } from '../services/chatAssistant';
 import { studioSettingsData } from '../data/content';
 import { syncClientToZoho } from '../services/zohoService';
+import fs from 'fs';
+import path from 'path';
+import os from 'os';
 
-interface ChatMessage {
+export interface ChatMessage {
   sender: 'client' | 'admin';
   senderName: string;
   message: string;
@@ -12,7 +15,7 @@ interface ChatMessage {
   isRead: boolean;
 }
 
-interface ChatSession {
+export interface ChatSession {
   sessionId: string;
   clientName: string;
   clientEmail: string;
@@ -21,7 +24,69 @@ interface ChatSession {
   lastMessageAt: Date;
 }
 
+const CHATS_FILE = path.join(os.tmpdir(), 'wp_chats.json');
 const inMemoryChatSessions: Map<string, ChatSession> = new Map();
+
+const loadChatSessionsFromDisk = (): void => {
+  try {
+    if (fs.existsSync(CHATS_FILE)) {
+      const raw = fs.readFileSync(CHATS_FILE, 'utf-8');
+      const parsed: ChatSession[] = JSON.parse(raw);
+      if (Array.isArray(parsed)) {
+        for (const item of parsed) {
+          if (item && item.sessionId && !inMemoryChatSessions.has(item.sessionId)) {
+            inMemoryChatSessions.set(item.sessionId, {
+              ...item,
+              lastMessageAt: new Date(item.lastMessageAt || Date.now()),
+              messages: (item.messages || []).map((m) => ({
+                ...m,
+                sentAt: new Date(m.sentAt || Date.now()),
+              })),
+            });
+          }
+        }
+      }
+    }
+  } catch {
+    // Ignore read errors
+  }
+};
+
+const persistChatSessions = (): void => {
+  try {
+    const list = Array.from(inMemoryChatSessions.values());
+    fs.writeFileSync(CHATS_FILE, JSON.stringify(list, null, 2), 'utf-8');
+  } catch {
+    // Ignore write errors in restricted environments
+  }
+};
+
+// Initial disk load
+loadChatSessionsFromDisk();
+
+const createWelcomeSession = (
+  sessionId: string,
+  clientName?: string,
+  clientEmail?: string,
+): ChatSession => {
+  return {
+    sessionId,
+    clientName: clientName?.trim() || 'Website Guest',
+    clientEmail: clientEmail?.toLowerCase().trim() || '',
+    status: 'active',
+    messages: [
+      {
+        sender: 'admin',
+        senderName: 'Teja Web Studio',
+        message:
+          'Hello! Thanks for visiting Teja Web Studio. How can we help you with your website project today?',
+        sentAt: new Date(),
+        isRead: true,
+      },
+    ],
+    lastMessageAt: new Date(),
+  };
+};
 
 export const initOrGetSession = async (req: Request, res: Response): Promise<void> => {
   try {
@@ -32,29 +97,17 @@ export const initOrGetSession = async (req: Request, res: Response): Promise<voi
       return;
     }
 
+    loadChatSessionsFromDisk();
     let session = inMemoryChatSessions.get(sessionId);
+
     if (!session) {
-      session = {
-        sessionId,
-        clientName: clientName?.trim() || 'Website Guest',
-        clientEmail: clientEmail?.toLowerCase().trim() || '',
-        status: 'active',
-        messages: [
-          {
-            sender: 'admin',
-            senderName: 'Teja Web Studio',
-            message:
-              'Hello! Thanks for visiting Teja Web Studio. How can we help you with your website project today?',
-            sentAt: new Date(),
-            isRead: true,
-          },
-        ],
-        lastMessageAt: new Date(),
-      };
+      session = createWelcomeSession(sessionId, clientName, clientEmail);
       inMemoryChatSessions.set(sessionId, session);
+      persistChatSessions();
     } else {
       if (clientName) session.clientName = clientName.trim();
       if (clientEmail) session.clientEmail = clientEmail.toLowerCase().trim();
+      persistChatSessions();
     }
 
     if (clientEmail && clientName && clientName.trim() !== 'Website Guest') {
@@ -76,11 +129,14 @@ export const initOrGetSession = async (req: Request, res: Response): Promise<voi
 export const getSessionMessages = async (req: Request, res: Response): Promise<void> => {
   try {
     const { sessionId } = req.params;
-    const session = inMemoryChatSessions.get(sessionId);
+    loadChatSessionsFromDisk();
+    let session = inMemoryChatSessions.get(sessionId);
 
     if (!session) {
-      sendError(res, 'Conversation not found.', 404);
-      return;
+      // Gracefully auto-create default welcome session rather than throwing 404
+      session = createWelcomeSession(sessionId);
+      inMemoryChatSessions.set(sessionId, session);
+      persistChatSessions();
     }
 
     sendSuccess(res, session.messages, 'Messages retrieved.');
@@ -99,6 +155,7 @@ export const sendClientMessage = async (req: Request, res: Response): Promise<vo
       return;
     }
 
+    loadChatSessionsFromDisk();
     let session = inMemoryChatSessions.get(sessionId);
     if (!session) {
       session = {
@@ -145,6 +202,7 @@ export const sendClientMessage = async (req: Request, res: Response): Promise<vo
       isRead: true,
     };
     session.messages.push(assistantMsg);
+    persistChatSessions();
 
     sendSuccess(
       res,
@@ -164,6 +222,7 @@ export const sendClientMessage = async (req: Request, res: Response): Promise<vo
 
 export const getAdminConversations = async (_req: Request, res: Response): Promise<void> => {
   try {
+    loadChatSessionsFromDisk();
     const conversations = Array.from(inMemoryChatSessions.values());
     sendSuccess(res, conversations, 'Conversations retrieved.');
   } catch (err: any) {
@@ -176,10 +235,11 @@ export const sendAdminReply = async (req: Request, res: Response): Promise<void>
     const { sessionId } = req.params;
     const { message } = req.body;
 
-    const session = inMemoryChatSessions.get(sessionId);
+    loadChatSessionsFromDisk();
+    let session = inMemoryChatSessions.get(sessionId);
     if (!session) {
-      sendError(res, 'Conversation not found.', 404);
-      return;
+      session = createWelcomeSession(sessionId);
+      inMemoryChatSessions.set(sessionId, session);
     }
 
     const adminMsg: ChatMessage = {
@@ -191,6 +251,7 @@ export const sendAdminReply = async (req: Request, res: Response): Promise<void>
     };
     session.messages.push(adminMsg);
     session.lastMessageAt = new Date();
+    persistChatSessions();
 
     sendSuccess(res, session, 'Admin reply sent.');
   } catch (err: any) {
@@ -201,14 +262,19 @@ export const sendAdminReply = async (req: Request, res: Response): Promise<void>
 export const closeConversation = async (req: Request, res: Response): Promise<void> => {
   try {
     const { sessionId } = req.params;
+    loadChatSessionsFromDisk();
     const session = inMemoryChatSessions.get(sessionId);
-    if (!session) {
-      sendError(res, 'Conversation not found.', 404);
-      return;
+    if (session) {
+      session.status = 'closed';
+      persistChatSessions();
     }
-    session.status = 'closed';
-    sendSuccess(res, session, 'Conversation closed.');
+    sendSuccess(res, session || { sessionId, status: 'closed' }, 'Conversation closed.');
   } catch (err: any) {
     sendError(res, err.message, 500);
   }
+};
+
+export const getAllChatSessions = (): ChatSession[] => {
+  loadChatSessionsFromDisk();
+  return Array.from(inMemoryChatSessions.values());
 };

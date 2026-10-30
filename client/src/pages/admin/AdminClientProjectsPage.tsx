@@ -30,8 +30,8 @@ export function AdminClientProjectsPage() {
     [error, setError] = useState('');
   const load = async () => {
     const response = await api.get('/client-projects', { params: { page, limit: 20, search } });
-    setProjects(response.data.data);
-    setPages(response.data.meta.totalPages);
+    setProjects(response.data?.data || []);
+    setPages(response.data?.meta?.totalPages || 1);
   };
   useEffect(() => {
     load().catch(() => {});
@@ -43,8 +43,12 @@ export function AdminClientProjectsPage() {
         params: { search: leadSearch, page: leadPage, limit: 20 },
       })
       .then((response) => {
-        setLeads(response.data.data);
-        setLeadPages(response.data.meta.totalPages);
+        setLeads(response.data?.data || []);
+        setLeadPages(response.data?.meta?.totalPages || 1);
+      })
+      .catch(() => {
+        setLeads([]);
+        setLeadPages(1);
       });
   }, [type, leadSearch, leadPage]);
   const choose = (project: any) => {

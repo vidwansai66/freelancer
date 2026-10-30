@@ -8,8 +8,11 @@ import {
 import { sendEmail, emailTemplates } from '../services/emailService';
 import { env } from '../config/env';
 import { randomUUID } from 'crypto';
+import fs from 'fs';
+import path from 'path';
+import os from 'os';
 
-interface LocalQuotation {
+export interface LocalQuotation {
   _id: string;
   name: string;
   email: string;
@@ -28,7 +31,38 @@ interface LocalQuotation {
   zohoLeadId?: string;
 }
 
-const inMemoryQuotations: LocalQuotation[] = [];
+const QUOTATIONS_FILE = path.join(os.tmpdir(), 'wp_quotations.json');
+let inMemoryQuotations: LocalQuotation[] = [];
+
+const loadQuotations = (): LocalQuotation[] => {
+  try {
+    if (fs.existsSync(QUOTATIONS_FILE)) {
+      const data = fs.readFileSync(QUOTATIONS_FILE, 'utf-8');
+      const parsed = JSON.parse(data);
+      if (Array.isArray(parsed)) {
+        inMemoryQuotations = parsed;
+        return inMemoryQuotations;
+      }
+    }
+  } catch {
+    // Ignore read errors
+  }
+  return inMemoryQuotations;
+};
+
+const persistQuotations = (): void => {
+  try {
+    fs.writeFileSync(QUOTATIONS_FILE, JSON.stringify(inMemoryQuotations, null, 2), 'utf-8');
+  } catch {
+    // Ignore write errors
+  }
+};
+
+loadQuotations();
+
+export const getAllQuotations = (): LocalQuotation[] => {
+  return [...loadQuotations()];
+};
 
 export const submitQuotation = async (req: Request, res: Response): Promise<void> => {
   try {
@@ -72,6 +106,7 @@ export const submitQuotation = async (req: Request, res: Response): Promise<void
     };
 
     inMemoryQuotations.unshift(quotationRecord);
+    persistQuotations();
 
     // 1. If Zoho CRM is configured, sync quotation or queue for background retry
     if (isZohoConfigured()) {
@@ -130,6 +165,7 @@ export const submitQuotation = async (req: Request, res: Response): Promise<void
 
 export const getQuotations = async (req: Request, res: Response): Promise<void> => {
   try {
+    loadQuotations();
     const { status, search, page = '1', limit = '15' } = req.query;
 
     let list = [...inMemoryQuotations];
@@ -167,6 +203,7 @@ export const getQuotations = async (req: Request, res: Response): Promise<void> 
 
 export const getQuotationById = async (req: Request, res: Response): Promise<void> => {
   try {
+    loadQuotations();
     const { id } = req.params;
     const quotation = inMemoryQuotations.find((q) => q._id === id);
     if (!quotation) {
@@ -181,6 +218,7 @@ export const getQuotationById = async (req: Request, res: Response): Promise<voi
 
 export const updateQuotation = async (req: Request, res: Response): Promise<void> => {
   try {
+    loadQuotations();
     const { id } = req.params;
     const quotation = inMemoryQuotations.find((q) => q._id === id);
     if (!quotation) {
@@ -192,6 +230,7 @@ export const updateQuotation = async (req: Request, res: Response): Promise<void
     if (status) quotation.status = status;
     if (estimatedQuote !== undefined) quotation.estimatedQuote = Number(estimatedQuote);
     if (notes !== undefined) quotation.notes = notes;
+    persistQuotations();
 
     sendSuccess(res, quotation, 'Quotation updated successfully.');
   } catch (err: any) {
@@ -201,6 +240,7 @@ export const updateQuotation = async (req: Request, res: Response): Promise<void
 
 export const deleteQuotation = async (req: Request, res: Response): Promise<void> => {
   try {
+    loadQuotations();
     const { id } = req.params;
     const index = inMemoryQuotations.findIndex((q) => q._id === id);
     if (index === -1) {
@@ -208,6 +248,7 @@ export const deleteQuotation = async (req: Request, res: Response): Promise<void
       return;
     }
     inMemoryQuotations.splice(index, 1);
+    persistQuotations();
     sendSuccess(res, { id }, 'Quotation deleted successfully.');
   } catch (err: any) {
     sendError(res, err.message, 500);

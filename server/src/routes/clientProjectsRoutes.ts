@@ -33,21 +33,18 @@ const CLIENT_PROJECTS_FILE = path.join(os.tmpdir(), 'wp_client_projects.json');
 let inMemoryClientProjects: LocalClientProject[] = [];
 
 const loadClientProjects = (): LocalClientProject[] => {
-  if (inMemoryClientProjects.length > 0) {
-    return inMemoryClientProjects;
-  }
   try {
     if (fs.existsSync(CLIENT_PROJECTS_FILE)) {
       const data = fs.readFileSync(CLIENT_PROJECTS_FILE, 'utf-8');
-      inMemoryClientProjects = JSON.parse(data);
-      if (Array.isArray(inMemoryClientProjects) && inMemoryClientProjects.length > 0) {
+      const parsed = JSON.parse(data);
+      if (Array.isArray(parsed) && parsed.length > 0) {
+        inMemoryClientProjects = parsed;
         return inMemoryClientProjects;
       }
     }
   } catch {
     // Ignore read errors
   }
-  inMemoryClientProjects = [];
   return inMemoryClientProjects;
 };
 

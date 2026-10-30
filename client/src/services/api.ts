@@ -12,6 +12,17 @@ export const api = axios.create({
 });
 
 // Request interceptor: attach Admin token if present
+api.interceptors.request.use(
+  (config: any) => {
+    const token = localStorage.getItem('studio_admin_token');
+    if (token && !config.headers?.Authorization) {
+      config.headers = config.headers || {};
+      config.headers.Authorization = `Bearer ${token}`;
+    }
+    return config;
+  },
+  (error: any) => Promise.reject(error),
+);
 
 // Response interceptor: handle 401 unauthorized automatically
 api.interceptors.response.use(
@@ -26,7 +37,8 @@ api.interceptors.response.use(
       localStorage.removeItem('studio_admin_user');
       window.location.href = '/admin/login';
     }
-    if (error.response?.status !== 401) {
+    const skipGlobalError = (error.config as any)?.skipGlobalError;
+    if (error.response?.status !== 401 && !skipGlobalError) {
       const data = error.response?.data;
       let rawMsg =
         (typeof data?.error === 'string' ? data.error : null) ||
@@ -139,9 +151,9 @@ export const faqApi = {
 
 export const chatApi = {
   initSession: (data: { sessionId: string; clientName?: string; clientEmail?: string }) =>
-    api.post('/chat/session', data).then((res) => res.data.data),
+    api.post('/chat/session', data, { skipGlobalError: true } as any).then((res) => res.data.data),
   getMessages: (sessionId: string) =>
-    api.get(`/chat/${sessionId}/messages`).then((res) => res.data.data),
+    api.get(`/chat/${sessionId}/messages`, { skipGlobalError: true } as any).then((res) => res.data.data),
   sendMessage: (sessionId: string, message: string, clientName?: string) =>
     api.post(`/chat/${sessionId}/message`, { message, clientName }).then((res) => res.data.data),
   getAdminConversations: () => api.get('/chat/admin/conversations').then((res) => res.data.data),

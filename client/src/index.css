@@ -391,3 +391,211 @@ html.lenis body {
 .lenis.lenis-smooth iframe {
   pointer-events: none;
 }
+
+/* ========================================================================== */
+/* ADMIN DASHBOARD & WORKSPACE - SLATE GRAY (#203C3D) & PEACH FUZZ (#FEDAB8)  */
+/* Strictly scoped ONLY to .admin-portal and .admin-workspace                 */
+/* ========================================================================== */
+
+.admin-portal {
+  --color-primary: #203C3D;
+  --color-primary-hover: #162A2B;
+  --color-primary-light: #2C5051;
+  --color-accent: #FEDAB8;
+}
+
+.admin-workspace {
+  background-color: #F6F4F0 !important;
+  color: #111E1F !important;
+}
+
+/* Headings inside admin workspace: deep luxury Slate Gray */
+.admin-workspace h1,
+.admin-workspace h2,
+.admin-workspace h3,
+.admin-workspace h4,
+.admin-workspace h5,
+.admin-workspace h6 {
+  color: #203C3D !important;
+  font-weight: 800 !important;
+  letter-spacing: -0.02em;
+}
+
+/* Text overrides: comfortable, high-contrast dark slate/black */
+.admin-workspace .text-white {
+  color: #111E1F !important;
+  font-weight: 700 !important;
+}
+
+.admin-workspace .text-muted-foreground {
+  color: #4D6768 !important;
+  font-weight: 600 !important;
+}
+
+.admin-workspace p {
+  color: #1A2E2F !important;
+}
+
+.admin-workspace label {
+  color: #203C3D !important;
+  font-weight: 800 !important;
+}
+
+/* Card surfaces: Smooth warm white with refined Slate borders & interactive hover */
+.admin-workspace .bg-card,
+.admin-workspace .bg-secondary,
+.admin-workspace .bg-background {
+  background-color: #FFFFFF !important;
+}
+
+.admin-workspace .rounded-2xl.border,
+.admin-workspace .rounded-xl.border,
+.admin-workspace .rounded-3xl.border,
+.admin-workspace .bg-card {
+  box-shadow: 0 4px 12px -2px rgba(32, 60, 61, 0.05);
+  border: 1.5px solid rgba(32, 60, 61, 0.16) !important;
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.admin-workspace .rounded-2xl.border:hover,
+.admin-workspace .rounded-xl.border:hover,
+.admin-workspace .bg-card:hover {
+  border-color: rgba(32, 60, 61, 0.35) !important;
+  box-shadow: 0 10px 24px -4px rgba(32, 60, 61, 0.08);
+}
+
+.admin-workspace .border-border {
+  border-color: rgba(32, 60, 61, 0.16) !important;
+}
+
+/* Form inputs: Crisp white, slate borders, interactive Peach Fuzz focus ring */
+.admin-workspace input:not([type="checkbox"]):not([type="radio"]):not([type="submit"]):not([type="button"]),
+.admin-workspace textarea,
+.admin-workspace select {
+  background-color: #FFFFFF !important;
+  color: #111E1F !important;
+  font-weight: 700 !important;
+  border: 1.5px solid rgba(32, 60, 61, 0.25) !important;
+  border-radius: 0.75rem !important;
+  box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.03);
+  transition: all 0.15s ease;
+}
+
+.admin-workspace input::placeholder,
+.admin-workspace textarea::placeholder {
+  color: #7A9394 !important;
+  font-weight: 500 !important;
+}
+
+.admin-workspace input:focus,
+.admin-workspace textarea:focus,
+.admin-workspace select:focus {
+  border-color: #203C3D !important;
+  box-shadow: 0 0 0 3px rgba(254, 218, 184, 0.6) !important;
+  outline: none !important;
+}
+
+/* Tables in admin workspace: Slate & Peach Fuzz */
+.admin-workspace table {
+  background-color: #FFFFFF !important;
+}
+
+.admin-workspace thead {
+  background-color: #203C3D !important;
+}
+
+.admin-workspace thead th {
+  color: #FEDAB8 !important;
+  font-weight: 800 !important;
+  letter-spacing: 0.04em;
+}
+
+.admin-workspace tbody tr {
+  border-bottom: 1px solid rgba(32, 60, 61, 0.1) !important;
+  transition: background-color 0.15s ease;
+}
+
+.admin-workspace tbody tr:hover {
+  background-color: #FFF7EF !important;
+}
+
+.admin-workspace tbody td {
+  color: #111E1F !important;
+}
+
+/* Modal Dialogs in Admin: Slate Gray & Peach Fuzz Frame */
+.admin-portal [role="dialog"] {
+  background-color: rgba(20, 38, 39, 0.85) !important;
+  backdrop-filter: blur(10px) !important;
+}
+
+.admin-portal [role="dialog"] > div {
+  background-color: #FFFFFF !important;
+  border: 2px solid #FEDAB8 !important;
+  box-shadow: 0 25px 50px -12px rgba(20, 38, 39, 0.35), 0 0 30px rgba(254, 218, 184, 0.25) !important;
+  color: #111E1F !important;
+}
+
+.admin-portal [role="dialog"] label {
+  color: #203C3D !important;
+  font-weight: 800 !important;
+}
+
+.admin-portal [role="dialog"] input,
+.admin-portal [role="dialog"] textarea,
+.admin-portal [role="dialog"] select {
+  background-color: #FFFFFF !important;
+  color: #111E1F !important;
+  font-weight: 700 !important;
+  border: 1.5px solid rgba(32, 60, 61, 0.25) !important;
+}
+
+.admin-portal [role="dialog"] input::placeholder,
+.admin-portal [role="dialog"] textarea::placeholder {
+  color: #7A9394 !important;
+}
+
+/* Badges and pills in Admin: Slate & Peach Fuzz */
+.admin-workspace span[class*="bg-emerald"] {
+  background-color: #FEDAB8 !important;
+  color: #203C3D !important;
+  border: 1px solid #F8C89A !important;
+  font-weight: 800 !important;
+}
+
+.admin-workspace span[class*="bg-amber"] {
+  background-color: #FEF3C7 !important;
+  color: #78350F !important;
+  border: 1px solid #FDE68A !important;
+  font-weight: 800 !important;
+}
+
+.admin-workspace span[class*="bg-rose"] {
+  background-color: #FFE4E6 !important;
+  color: #9F1239 !important;
+  border: 1px solid #FECDD3 !important;
+  font-weight: 800 !important;
+}
+
+/* Buttons in admin workspace: Slate Gray (#203C3D) & Peach Fuzz (#FEDAB8) */
+.admin-workspace button.bg-primary,
+.admin-workspace a.bg-primary,
+.admin-workspace button[type="submit"] {
+  background-color: #203C3D !important;
+  color: #FEDAB8 !important;
+  font-weight: 800 !important;
+  border: 1.5px solid rgba(254, 218, 184, 0.3) !important;
+  box-shadow: 0 4px 10px rgba(32, 60, 61, 0.18) !important;
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1) !important;
+}
+
+.admin-workspace button.bg-primary:hover,
+.admin-workspace a.bg-primary:hover,
+.admin-workspace button[type="submit"]:hover {
+  background-color: #162A2B !important;
+  color: #FFFFFF !important;
+  transform: translateY(-1px) !important;
+  box-shadow: 0 6px 14px rgba(32, 60, 61, 0.25) !important;
+}
+
+

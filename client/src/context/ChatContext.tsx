@@ -46,6 +46,7 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   // Initial session startup
   useEffect(() => {
+    if (window.location.pathname.startsWith('/admin')) return;
     if (!clientName || !clientEmail) return;
     const initChat = async () => {
       try {
@@ -68,8 +69,12 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   // Periodic polling for incoming admin replies
   useEffect(() => {
+    if (window.location.pathname.startsWith('/admin')) return;
     if (!clientName || !clientEmail) return;
+    let isReinitializing = false;
+
     const interval = setInterval(async () => {
+      if (window.location.pathname.startsWith('/admin')) return;
       try {
         const msgs = await chatApi.getMessages(sessionId);
         if (Array.isArray(msgs)) {
@@ -86,8 +91,26 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
           setMessages(msgs);
           lastMessageCountRef.current = msgs.length;
         }
-      } catch {
-        // Silently skip failed poll in background
+      } catch (err: any) {
+        // If the session was missing on the server (e.g. fresh deployment), auto-reinitialize quietly
+        if (err?.response?.status === 404 && !isReinitializing) {
+          isReinitializing = true;
+          try {
+            const reinitialized = await chatApi.initSession({
+              sessionId,
+              clientEmail: clientEmail || undefined,
+              clientName: clientName || undefined,
+            });
+            if (reinitialized?.messages) {
+              setMessages(reinitialized.messages);
+              lastMessageCountRef.current = reinitialized.messages.length;
+            }
+          } catch {
+            // Quiet fallback
+          } finally {
+            isReinitializing = false;
+          }
+        }
       }
     }, 4000);
 

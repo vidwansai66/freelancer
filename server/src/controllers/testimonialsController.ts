@@ -42,10 +42,33 @@ export const submitReview = async (req: Request, res: Response): Promise<void> =
   }
 };
 
-export const getAllTestimonialsAdmin = async (_req: Request, res: Response): Promise<void> => {
+export const getAllTestimonialsAdmin = async (req: Request, res: Response): Promise<void> => {
   try {
-    const testimonials = contentStore.getTestimonials(true);
-    sendSuccess(res, testimonials, 'All testimonials retrieved successfully.');
+    const { search, page = '1', limit = '20' } = req.query;
+    let testimonials = contentStore.getTestimonials(true);
+
+    if (search) {
+      const q = String(search).toLowerCase();
+      testimonials = testimonials.filter(
+        (t) =>
+          t.clientName.toLowerCase().includes(q) ||
+          t.company.toLowerCase().includes(q) ||
+          t.reviewText.toLowerCase().includes(q),
+      );
+    }
+
+    const total = testimonials.length;
+    const pageNum = Math.max(1, parseInt(String(page), 10));
+    const limitNum = Math.max(1, parseInt(String(limit), 10));
+    const startIndex = (pageNum - 1) * limitNum;
+    const paginated = testimonials.slice(startIndex, startIndex + limitNum);
+
+    sendSuccess(res, paginated, 'All testimonials retrieved successfully.', 200, {
+      page: pageNum,
+      limit: limitNum,
+      total,
+      totalPages: Math.ceil(total / limitNum) || 1,
+    });
   } catch (err: any) {
     sendError(res, err.message, 500);
   }

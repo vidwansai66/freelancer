@@ -15,6 +15,11 @@ import {
   StudioSettings,
 } from '../data/content';
 import { randomUUID } from 'crypto';
+import fs from 'fs';
+import path from 'path';
+import os from 'os';
+
+const CONTENT_FILE = path.join(os.tmpdir(), 'wp_content_store.json');
 
 class ContentStore {
   private services: ServiceItem[] = [...servicesData];
@@ -25,21 +30,73 @@ class ContentStore {
   private blogPosts: BlogPostItem[] = [...blogPostsData];
   private settings: StudioSettings = { ...studioSettingsData };
 
+  constructor() {
+    this.loadFromDisk();
+  }
+
+  private loadFromDisk(): void {
+    try {
+      if (fs.existsSync(CONTENT_FILE)) {
+        const raw = fs.readFileSync(CONTENT_FILE, 'utf-8');
+        const parsed = JSON.parse(raw);
+        if (parsed) {
+          if (Array.isArray(parsed.services)) this.services = parsed.services;
+          if (Array.isArray(parsed.projects)) this.projects = parsed.projects;
+          if (Array.isArray(parsed.pricingPlans)) this.pricingPlans = parsed.pricingPlans;
+          if (Array.isArray(parsed.faqs)) this.faqs = parsed.faqs;
+          if (Array.isArray(parsed.testimonials)) this.testimonials = parsed.testimonials;
+          if (Array.isArray(parsed.blogPosts)) this.blogPosts = parsed.blogPosts;
+          if (parsed.settings) this.settings = { ...this.settings, ...parsed.settings };
+        }
+      }
+    } catch {
+      // Ignore read errors
+    }
+  }
+
+  private saveToDisk(): void {
+    try {
+      fs.writeFileSync(
+        CONTENT_FILE,
+        JSON.stringify(
+          {
+            services: this.services,
+            projects: this.projects,
+            pricingPlans: this.pricingPlans,
+            faqs: this.faqs,
+            testimonials: this.testimonials,
+            blogPosts: this.blogPosts,
+            settings: this.settings,
+          },
+          null,
+          2,
+        ),
+        'utf-8',
+      );
+    } catch {
+      // Ignore write errors
+    }
+  }
+
   // Services
   getServices(all = false): ServiceItem[] {
+    this.loadFromDisk();
     const list = all ? this.services : this.services.filter((s) => s.isPublished !== false);
     return [...list].sort((a, b) => (a.orderIndex || 0) - (b.orderIndex || 0));
   }
 
   getServiceBySlug(slug: string): ServiceItem | undefined {
+    this.loadFromDisk();
     return this.services.find((s) => s.slug === slug);
   }
 
   getServiceById(id: string): ServiceItem | undefined {
+    this.loadFromDisk();
     return this.services.find((s) => s._id === id);
   }
 
   addService(data: Partial<ServiceItem>): ServiceItem {
+    this.loadFromDisk();
     const newService: ServiceItem = {
       _id: data._id || `srv-${randomUUID().slice(0, 8)}`,
       isPublished: data.isPublished ?? true,
@@ -55,24 +112,30 @@ class ContentStore {
       createdAt: new Date().toISOString(),
     };
     this.services.push(newService);
+    this.saveToDisk();
     return newService;
   }
 
   updateService(id: string, data: Partial<ServiceItem>): ServiceItem | undefined {
+    this.loadFromDisk();
     const index = this.services.findIndex((s) => s._id === id);
     if (index === -1) return undefined;
     this.services[index] = { ...this.services[index], ...data };
+    this.saveToDisk();
     return this.services[index];
   }
 
   deleteService(id: string): boolean {
+    this.loadFromDisk();
     const prevLen = this.services.length;
     this.services = this.services.filter((s) => s._id !== id);
+    this.saveToDisk();
     return this.services.length < prevLen;
   }
 
   // Projects
   getProjects(params?: { category?: string; search?: string; page?: number; limit?: number }) {
+    this.loadFromDisk();
     let list = [...this.projects];
     if (params?.category) {
       list = list.filter((p) => p.category.toLowerCase() === params.category!.toLowerCase());
@@ -102,14 +165,17 @@ class ContentStore {
   }
 
   getProjectBySlug(slug: string): ProjectItem | undefined {
+    this.loadFromDisk();
     return this.projects.find((p) => p.slug === slug);
   }
 
   getProjectById(id: string): ProjectItem | undefined {
+    this.loadFromDisk();
     return this.projects.find((p) => p._id === id);
   }
 
   addProject(data: Partial<ProjectItem>): ProjectItem {
+    this.loadFromDisk();
     const newProject: ProjectItem = {
       _id: data._id || `prj-${randomUUID().slice(0, 8)}`,
       title: data.title || 'New Project',
@@ -128,33 +194,41 @@ class ContentStore {
       createdAt: new Date().toISOString(),
     };
     this.projects.push(newProject);
+    this.saveToDisk();
     return newProject;
   }
 
   updateProject(id: string, data: Partial<ProjectItem>): ProjectItem | undefined {
+    this.loadFromDisk();
     const index = this.projects.findIndex((p) => p._id === id);
     if (index === -1) return undefined;
     this.projects[index] = { ...this.projects[index], ...data };
+    this.saveToDisk();
     return this.projects[index];
   }
 
   deleteProject(id: string): boolean {
+    this.loadFromDisk();
     const prevLen = this.projects.length;
     this.projects = this.projects.filter((p) => p._id !== id);
+    this.saveToDisk();
     return this.projects.length < prevLen;
   }
 
   // Pricing Plans
   getPricingPlans(all = false): PricingPlanItem[] {
+    this.loadFromDisk();
     const list = all ? this.pricingPlans : this.pricingPlans.filter((p) => p.isActive !== false);
     return [...list].sort((a, b) => (a.orderIndex || 0) - (b.orderIndex || 0));
   }
 
   getPricingPlanById(id: string): PricingPlanItem | undefined {
+    this.loadFromDisk();
     return this.pricingPlans.find((p) => p._id === id);
   }
 
   addPricingPlan(data: Partial<PricingPlanItem>): PricingPlanItem {
+    this.loadFromDisk();
     const newPlan: PricingPlanItem = {
       _id: data._id || `prc-${randomUUID().slice(0, 8)}`,
       name: data.name || 'New Plan',
@@ -171,33 +245,41 @@ class ContentStore {
       createdAt: new Date().toISOString(),
     };
     this.pricingPlans.push(newPlan);
+    this.saveToDisk();
     return newPlan;
   }
 
   updatePricingPlan(id: string, data: Partial<PricingPlanItem>): PricingPlanItem | undefined {
+    this.loadFromDisk();
     const index = this.pricingPlans.findIndex((p) => p._id === id);
     if (index === -1) return undefined;
     this.pricingPlans[index] = { ...this.pricingPlans[index], ...data };
+    this.saveToDisk();
     return this.pricingPlans[index];
   }
 
   deletePricingPlan(id: string): boolean {
+    this.loadFromDisk();
     const prevLen = this.pricingPlans.length;
     this.pricingPlans = this.pricingPlans.filter((p) => p._id !== id);
+    this.saveToDisk();
     return this.pricingPlans.length < prevLen;
   }
 
   // FAQs
   getFaqs(all = false): FAQItem[] {
+    this.loadFromDisk();
     const list = all ? this.faqs : this.faqs.filter((f) => f.isActive !== false);
     return [...list].sort((a, b) => (a.orderIndex || 0) - (b.orderIndex || 0));
   }
 
   getFaqById(id: string): FAQItem | undefined {
+    this.loadFromDisk();
     return this.faqs.find((f) => f._id === id);
   }
 
   addFaq(data: Partial<FAQItem>): FAQItem {
+    this.loadFromDisk();
     const newFaq: FAQItem = {
       _id: data._id || `faq-${randomUUID().slice(0, 8)}`,
       question: data.question || '',
@@ -208,33 +290,41 @@ class ContentStore {
       createdAt: new Date().toISOString(),
     };
     this.faqs.push(newFaq);
+    this.saveToDisk();
     return newFaq;
   }
 
   updateFaq(id: string, data: Partial<FAQItem>): FAQItem | undefined {
+    this.loadFromDisk();
     const index = this.faqs.findIndex((f) => f._id === id);
     if (index === -1) return undefined;
     this.faqs[index] = { ...this.faqs[index], ...data };
+    this.saveToDisk();
     return this.faqs[index];
   }
 
   deleteFaq(id: string): boolean {
+    this.loadFromDisk();
     const prevLen = this.faqs.length;
     this.faqs = this.faqs.filter((f) => f._id !== id);
+    this.saveToDisk();
     return this.faqs.length < prevLen;
   }
 
   // Testimonials
   getTestimonials(all = false): TestimonialItem[] {
+    this.loadFromDisk();
     const list = all ? this.testimonials : this.testimonials.filter((t) => t.isApproved);
     return [...list];
   }
 
   getTestimonialById(id: string): TestimonialItem | undefined {
+    this.loadFromDisk();
     return this.testimonials.find((t) => t._id === id);
   }
 
   addTestimonial(data: Partial<TestimonialItem>): TestimonialItem {
+    this.loadFromDisk();
     const newTestimonial: TestimonialItem = {
       _id: data._id || `tst-${randomUUID().slice(0, 8)}`,
       clientName: data.clientName || 'Anonymous',
@@ -248,24 +338,30 @@ class ContentStore {
       createdAt: new Date().toISOString(),
     };
     this.testimonials.push(newTestimonial);
+    this.saveToDisk();
     return newTestimonial;
   }
 
   updateTestimonial(id: string, data: Partial<TestimonialItem>): TestimonialItem | undefined {
+    this.loadFromDisk();
     const index = this.testimonials.findIndex((t) => t._id === id);
     if (index === -1) return undefined;
     this.testimonials[index] = { ...this.testimonials[index], ...data };
+    this.saveToDisk();
     return this.testimonials[index];
   }
 
   deleteTestimonial(id: string): boolean {
+    this.loadFromDisk();
     const prevLen = this.testimonials.length;
     this.testimonials = this.testimonials.filter((t) => t._id !== id);
+    this.saveToDisk();
     return this.testimonials.length < prevLen;
   }
 
   // Blog Posts
   getBlogPosts(params?: { tag?: string; search?: string; page?: number; limit?: number }) {
+    this.loadFromDisk();
     let list = [...this.blogPosts].filter((b) => b.isPublished);
     if (params?.tag) {
       list = list.filter((b) => b.tags.map((t) => t.toLowerCase()).includes(params.tag!.toLowerCase()));
@@ -294,14 +390,17 @@ class ContentStore {
   }
 
   getBlogPostBySlug(slug: string): BlogPostItem | undefined {
+    this.loadFromDisk();
     return this.blogPosts.find((b) => b.slug === slug);
   }
 
   getBlogPostById(id: string): BlogPostItem | undefined {
+    this.loadFromDisk();
     return this.blogPosts.find((b) => b._id === id);
   }
 
   addBlogPost(data: Partial<BlogPostItem>): BlogPostItem {
+    this.loadFromDisk();
     const newPost: BlogPostItem = {
       _id: data._id || `blg-${randomUUID().slice(0, 8)}`,
       title: data.title || 'New Blog Post',
@@ -317,29 +416,37 @@ class ContentStore {
       createdAt: new Date().toISOString(),
     };
     this.blogPosts.push(newPost);
+    this.saveToDisk();
     return newPost;
   }
 
   updateBlogPost(id: string, data: Partial<BlogPostItem>): BlogPostItem | undefined {
+    this.loadFromDisk();
     const index = this.blogPosts.findIndex((b) => b._id === id);
     if (index === -1) return undefined;
     this.blogPosts[index] = { ...this.blogPosts[index], ...data };
+    this.saveToDisk();
     return this.blogPosts[index];
   }
 
   deleteBlogPost(id: string): boolean {
+    this.loadFromDisk();
     const prevLen = this.blogPosts.length;
     this.blogPosts = this.blogPosts.filter((b) => b._id !== id);
+    this.saveToDisk();
     return this.blogPosts.length < prevLen;
   }
 
   // Settings
   getSettings(): StudioSettings {
+    this.loadFromDisk();
     return { ...this.settings };
   }
 
   updateSettings(data: Partial<StudioSettings>): StudioSettings {
+    this.loadFromDisk();
     this.settings = { ...this.settings, ...data };
+    this.saveToDisk();
     return { ...this.settings };
   }
 }

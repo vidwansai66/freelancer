@@ -57,12 +57,20 @@ export const createProject = async (req: Request, res: Response): Promise<void> 
       orderIndex,
     } = req.body;
 
-    if (!title || !category || !clientName || !featuredImage) {
-      sendError(res, 'Title, category, client name, and featured image are required.', 400);
+    const effectiveTitle = title?.trim();
+    if (!effectiveTitle) {
+      sendError(res, 'Project title is required.', 400);
       return;
     }
 
-    const finalSlug = slug ? slugify(slug) : slugify(title);
+    const effectiveCategory = category?.trim() || 'Web Application';
+    const effectiveClient = clientName?.trim() || effectiveTitle;
+    const effectiveImage =
+      featuredImage?.trim() ||
+      galleryImages?.[0] ||
+      'https://images.unsplash.com/photo-1460925895917-afdab827c52f?auto=format&fit=crop&w=1200&q=80';
+
+    const finalSlug = slug ? slugify(slug) : slugify(effectiveTitle);
     const existing = contentStore.getProjectBySlug(finalSlug);
     if (existing) {
       sendError(res, `A project with slug "${finalSlug}" already exists.`, 409);
@@ -70,18 +78,18 @@ export const createProject = async (req: Request, res: Response): Promise<void> 
     }
 
     const project = contentStore.addProject({
-      title,
+      title: effectiveTitle,
       slug: finalSlug,
-      category,
-      clientName,
-      resultStat: resultStat || '',
-      featuredImage,
-      galleryImages: Array.isArray(galleryImages) ? galleryImages : [],
-      liveUrl: liveUrl || '',
-      githubUrl: githubUrl || '',
-      technologies: Array.isArray(technologies) ? technologies : [],
-      caseStudyMarkdown: caseStudyMarkdown || '',
-      isFeatured: Boolean(isFeatured),
+      category: effectiveCategory,
+      clientName: effectiveClient,
+      resultStat: resultStat?.trim() || '',
+      featuredImage: effectiveImage,
+      galleryImages: Array.isArray(galleryImages) && galleryImages.length > 0 ? galleryImages : [effectiveImage],
+      liveUrl: liveUrl?.trim() || '',
+      githubUrl: githubUrl?.trim() || '',
+      technologies: Array.isArray(technologies) && technologies.length > 0 ? technologies : ['Web Studio', 'React'],
+      caseStudyMarkdown: caseStudyMarkdown?.trim() || `### ${effectiveTitle}\n\nCase study details for ${effectiveTitle}.`,
+      isFeatured: isFeatured !== undefined ? Boolean(isFeatured) : true,
       orderIndex: Number(orderIndex) || 0,
     });
 

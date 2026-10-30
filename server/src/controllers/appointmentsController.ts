@@ -85,19 +85,20 @@ let inMemoryAppointments: LocalAppointment[] = [];
 
 // Load persisted appointments from file if available, otherwise initialize with seed
 const loadAppointments = (): LocalAppointment[] => {
-  if (inMemoryAppointments.length > 0) {
-    return inMemoryAppointments;
-  }
   try {
     if (fs.existsSync(APPOINTMENTS_FILE)) {
       const data = fs.readFileSync(APPOINTMENTS_FILE, 'utf-8');
-      inMemoryAppointments = JSON.parse(data);
-      if (Array.isArray(inMemoryAppointments) && inMemoryAppointments.length > 0) {
+      const parsed = JSON.parse(data);
+      if (Array.isArray(parsed) && parsed.length > 0) {
+        inMemoryAppointments = parsed;
         return inMemoryAppointments;
       }
     }
   } catch {
     // Fall back to memory on file read errors
+  }
+  if (inMemoryAppointments.length > 0) {
+    return inMemoryAppointments;
   }
   inMemoryAppointments = getInitialSeedAppointments();
   persistAppointments();

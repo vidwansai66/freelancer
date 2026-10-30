@@ -20,20 +20,20 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [isLoading, setIsLoading] = useState<boolean>(true);
 
   useEffect(() => {
-    localStorage.removeItem('studio_admin_token');
-    localStorage.removeItem('studio_admin_user');
     const verifyToken = async () => {
-      {
-        try {
-          const res = await api.get('/auth/me');
-          setAdmin(res.data.data);
-          setToken('cookie');
-        } catch {
-          setAdmin(null);
-          setToken(null);
-        }
+      const savedToken = localStorage.getItem('studio_admin_token');
+      try {
+        const res = await api.get('/auth/me');
+        setAdmin(res.data.data);
+        setToken(savedToken || 'cookie');
+      } catch {
+        localStorage.removeItem('studio_admin_token');
+        localStorage.removeItem('studio_admin_user');
+        setAdmin(null);
+        setToken(null);
+      } finally {
+        setIsLoading(false);
       }
-      setIsLoading(false);
     };
 
     verifyToken();
@@ -43,7 +43,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     try {
       const res = await api.post('/auth/login', { email, password });
       const { token: receivedToken, admin: adminData } = res.data.data;
-      setToken('cookie');
+      if (receivedToken) {
+        localStorage.setItem('studio_admin_token', receivedToken);
+      }
+      if (adminData) {
+        localStorage.setItem('studio_admin_user', JSON.stringify(adminData));
+      }
+      setToken(receivedToken || 'cookie');
       setAdmin(adminData);
       return { success: true };
     } catch (err: any) {

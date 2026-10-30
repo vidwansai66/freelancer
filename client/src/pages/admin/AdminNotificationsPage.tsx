@@ -7,8 +7,8 @@ export function AdminNotificationsPage() {
     [pages, setPages] = useState(1);
   useEffect(() => {
     api.get('/notifications', { params: { page, limit: 20 } }).then((response) => {
-      setRecords(response.data.data);
-      setPages(response.data.meta.totalPages);
+      setRecords(response.data?.data || []);
+      setPages(response.data?.meta?.totalPages || 1);
     });
   }, [page]);
   return (
