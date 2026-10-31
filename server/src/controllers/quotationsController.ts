@@ -11,6 +11,7 @@ import { randomUUID } from 'crypto';
 import fs from 'fs';
 import path from 'path';
 import os from 'os';
+import { loadJsonFromBestPath, saveJsonToAllPaths } from '../utils/storagePaths';
 
 export interface LocalQuotation {
   _id: string;
@@ -31,31 +32,15 @@ export interface LocalQuotation {
   zohoLeadId?: string;
 }
 
-const QUOTATIONS_FILE = path.join(os.tmpdir(), 'wp_quotations.json');
 let inMemoryQuotations: LocalQuotation[] = [];
 
 const loadQuotations = (): LocalQuotation[] => {
-  try {
-    if (fs.existsSync(QUOTATIONS_FILE)) {
-      const data = fs.readFileSync(QUOTATIONS_FILE, 'utf-8');
-      const parsed = JSON.parse(data);
-      if (Array.isArray(parsed)) {
-        inMemoryQuotations = parsed;
-        return inMemoryQuotations;
-      }
-    }
-  } catch {
-    // Ignore read errors
-  }
+  inMemoryQuotations = loadJsonFromBestPath<LocalQuotation[]>('wp_quotations.json', inMemoryQuotations);
   return inMemoryQuotations;
 };
 
 const persistQuotations = (): void => {
-  try {
-    fs.writeFileSync(QUOTATIONS_FILE, JSON.stringify(inMemoryQuotations, null, 2), 'utf-8');
-  } catch {
-    // Ignore write errors
-  }
+  saveJsonToAllPaths('wp_quotations.json', inMemoryQuotations);
 };
 
 loadQuotations();

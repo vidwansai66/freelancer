@@ -45,8 +45,8 @@ export const ProjectDetailPage: React.FC = () => {
   return (
     <div className="pt-32 pb-24">
       <Seo
-        title={`${project.title} — Case Study`}
-        description={`${project.category} case study for ${project.clientName}. ${project.resultStat || 'Engineered by Teja Web Studio.'}`}
+        title={project.seoTitle || `${project.title} — Case Study`}
+        description={project.seoDescription || project.summary || `${project.category} case study for ${project.clientName}. ${project.resultStat || 'Engineered by Teja Web Studio.'}`}
         ogImage={project.featuredImage}
       />
       <div className="mx-auto max-w-4xl px-6">
@@ -57,12 +57,29 @@ export const ProjectDetailPage: React.FC = () => {
           <ArrowLeft className="h-4 w-4" /> Back to All Projects
         </Link>
 
+        {/* Draft Notice if previewed */}
+        {project.status === 'draft' && (
+          <div className="mb-6 rounded-2xl border-2 border-amber-500/40 bg-amber-500/10 p-4 text-xs font-bold text-amber-300 flex items-center justify-between">
+            <span>● Draft Preview Mode: This case study is private and not yet publicly visible.</span>
+            <Link to="/admin/portfolio" className="underline font-black text-amber-200">
+              Return to Admin Editor
+            </Link>
+          </div>
+        )}
+
         {/* Hero Banner */}
         <div className="rounded-3xl border border-border bg-card p-6 md:p-10 overflow-hidden">
           <div className="flex flex-wrap items-center justify-between gap-4 mb-4">
-            <span className="rounded-full bg-primary/20 text-primary px-3 py-1 text-xs font-semibold uppercase">
-              {project.category}
-            </span>
+            <div className="flex items-center gap-2">
+              <span className="rounded-full bg-primary/20 text-primary px-3 py-1 text-xs font-semibold uppercase">
+                {project.category}
+              </span>
+              {project.industry && (
+                <span className="rounded-full bg-secondary text-muted-foreground px-3 py-1 text-xs font-medium">
+                  {project.industry}
+                </span>
+              )}
+            </div>
             <div className="flex items-center gap-3">
               {project.liveUrl && (
                 <a
@@ -91,6 +108,12 @@ export const ProjectDetailPage: React.FC = () => {
           <p className="text-sm text-muted-foreground mt-2">
             Client: <span className="text-foreground">{project.clientName}</span>
           </p>
+
+          {project.summary && (
+            <p className="text-base text-neutral-300 mt-4 leading-relaxed font-medium">
+              {project.summary}
+            </p>
+          )}
 
           {/* Outcome Metric Callout */}
           {project.resultStat && (
@@ -126,13 +149,63 @@ export const ProjectDetailPage: React.FC = () => {
             </div>
           </div>
 
+          {/* Structured Case Study Sections */}
+          {(project.objectives || project.challenges || project.solutions || project.results) && (
+            <div className="mt-8 space-y-6">
+              {project.objectives && (
+                <div className="rounded-2xl border border-border bg-secondary/40 p-5">
+                  <h4 className="text-xs font-black uppercase tracking-wider text-primary mb-2">
+                    Project Objectives
+                  </h4>
+                  <p className="text-sm text-neutral-300 leading-relaxed whitespace-pre-line">
+                    {project.objectives}
+                  </p>
+                </div>
+              )}
+
+              <div className="grid gap-4 sm:grid-cols-2">
+                {project.challenges && (
+                  <div className="rounded-2xl border border-rose-500/20 bg-rose-500/5 p-5">
+                    <h4 className="text-xs font-black uppercase tracking-wider text-rose-400 mb-2">
+                      The Challenges
+                    </h4>
+                    <p className="text-xs text-neutral-300 leading-relaxed whitespace-pre-line">
+                      {project.challenges}
+                    </p>
+                  </div>
+                )}
+                {project.solutions && (
+                  <div className="rounded-2xl border border-emerald-500/20 bg-emerald-500/5 p-5">
+                    <h4 className="text-xs font-black uppercase tracking-wider text-emerald-400 mb-2">
+                      The Engineered Solution
+                    </h4>
+                    <p className="text-xs text-neutral-300 leading-relaxed whitespace-pre-line">
+                      {project.solutions}
+                    </p>
+                  </div>
+                )}
+              </div>
+
+              {project.results && (
+                <div className="rounded-2xl border border-primary/30 bg-primary/10 p-5">
+                  <h4 className="text-xs font-black uppercase tracking-wider text-primary mb-2">
+                    Measurable Results
+                  </h4>
+                  <p className="text-sm text-neutral-200 leading-relaxed font-medium whitespace-pre-line">
+                    {project.results}
+                  </p>
+                </div>
+              )}
+            </div>
+          )}
+
           {/* Case Study Written Content */}
           <div className="mt-8 space-y-6">
-            <div className="text-sm text-muted-foreground leading-relaxed whitespace-pre-wrap">
-              <MarkdownContent>
-                {project.caseStudyMarkdown || 'Comprehensive case study details coming soon.'}
-              </MarkdownContent>
-            </div>
+            {project.caseStudyMarkdown && (
+              <div className="text-sm text-muted-foreground leading-relaxed whitespace-pre-wrap">
+                <MarkdownContent>{project.caseStudyMarkdown}</MarkdownContent>
+              </div>
+            )}
 
             {/* Gallery Images */}
             {project.galleryImages && project.galleryImages.length > 0 && (

@@ -5,13 +5,23 @@ import { slugify } from '../utils/slugify';
 
 export const getProjects = async (req: Request, res: Response): Promise<void> => {
   try {
-    const { category, search, page = '1', limit = '12' } = req.query;
+    const { category, search, page = '1', limit = '12', status, featured } = req.query;
+
+    const isAdmin = Boolean(
+      (req as any).user ||
+      (req as any).cookies?.studio_session ||
+      req.headers.cookie?.includes('studio_session=') ||
+      req.headers.authorization,
+    );
+    const effectiveStatus = isAdmin && status ? String(status) : 'published';
 
     const result = contentStore.getProjects({
       category: category && category !== 'All' ? String(category) : undefined,
       search: search ? String(search) : undefined,
       page: Math.max(1, parseInt(String(page), 10)),
       limit: Math.max(1, parseInt(String(limit), 10)),
+      featured: featured !== undefined ? String(featured) === 'true' : undefined,
+      status: effectiveStatus,
     });
 
     sendSuccess(res, result.data, 'Projects retrieved successfully.', 200, {
@@ -28,7 +38,13 @@ export const getProjects = async (req: Request, res: Response): Promise<void> =>
 export const getProjectBySlug = async (req: Request, res: Response): Promise<void> => {
   try {
     const { slug } = req.params;
-    const project = contentStore.getProjectBySlug(slug);
+    const isAdmin = Boolean(
+      (req as any).user ||
+      (req as any).cookies?.studio_session ||
+      req.headers.cookie?.includes('studio_session=') ||
+      req.headers.authorization,
+    );
+    const project = contentStore.getProjectBySlug(slug, isAdmin);
     if (!project) {
       sendError(res, 'Project not found.', 404);
       return;
@@ -46,13 +62,24 @@ export const createProject = async (req: Request, res: Response): Promise<void> 
       slug,
       category,
       clientName,
+      industry,
       resultStat,
+      summary,
+      description,
+      objectives,
+      challenges,
+      solutions,
+      results,
       featuredImage,
       galleryImages,
       liveUrl,
       githubUrl,
       technologies,
+      servicesDelivered,
       caseStudyMarkdown,
+      seoTitle,
+      seoDescription,
+      status,
       isFeatured,
       orderIndex,
     } = req.body;
@@ -74,7 +101,7 @@ export const createProject = async (req: Request, res: Response): Promise<void> 
     if (!finalSlug) {
       finalSlug = `project-${Date.now().toString(36)}`;
     }
-    const existing = contentStore.getProjectBySlug(finalSlug);
+    const existing = contentStore.getProjectBySlug(finalSlug, true);
     if (existing) {
       finalSlug = `${finalSlug}-${Date.now().toString(36)}`;
     }
@@ -84,13 +111,24 @@ export const createProject = async (req: Request, res: Response): Promise<void> 
       slug: finalSlug,
       category: effectiveCategory,
       clientName: effectiveClient,
+      industry: industry?.trim() || '',
       resultStat: resultStat?.trim() || '',
+      summary: summary?.trim() || '',
+      description: description?.trim() || '',
+      objectives: objectives?.trim() || '',
+      challenges: challenges?.trim() || '',
+      solutions: solutions?.trim() || '',
+      results: results?.trim() || '',
       featuredImage: effectiveImage,
       galleryImages: Array.isArray(galleryImages) && galleryImages.length > 0 ? galleryImages : [effectiveImage],
       liveUrl: liveUrl?.trim() || '',
       githubUrl: githubUrl?.trim() || '',
       technologies: Array.isArray(technologies) && technologies.length > 0 ? technologies : ['Web Studio', 'React'],
+      servicesDelivered: Array.isArray(servicesDelivered) ? servicesDelivered : [],
       caseStudyMarkdown: caseStudyMarkdown?.trim() || `### ${effectiveTitle}\n\nCase study details for ${effectiveTitle}.`,
+      seoTitle: seoTitle?.trim() || '',
+      seoDescription: seoDescription?.trim() || '',
+      status: status === 'draft' ? 'draft' : 'published',
       isFeatured: isFeatured !== undefined ? Boolean(isFeatured) : true,
       orderIndex: Number(orderIndex) || 0,
     });
@@ -106,9 +144,7 @@ export const updateProject = async (req: Request, res: Response): Promise<void> 
     const { id } = req.params;
     const updateData = { ...req.body };
 
-    if (updateData.title && !updateData.slug) {
-      updateData.slug = slugify(updateData.title);
-    } else if (updateData.slug) {
+    if (updateData.slug) {
       updateData.slug = slugify(updateData.slug);
     }
 
@@ -119,6 +155,20 @@ export const updateProject = async (req: Request, res: Response): Promise<void> 
     }
 
     sendSuccess(res, project, 'Project updated successfully.');
+  } catch (err: any) {
+    sendError(res, err.message, 500);
+  }
+};
+
+export const reorderProjects = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { orders } = req.body;
+    if (!Array.isArray(orders)) {
+      sendError(res, 'Orders array is required.', 400);
+      return;
+    }
+    contentStore.reorderProjects(orders);
+    sendSuccess(res, { success: true }, 'Projects reordered successfully.');
   } catch (err: any) {
     sendError(res, err.message, 500);
   }

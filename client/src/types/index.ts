@@ -27,16 +27,28 @@ export interface Project {
   slug: string;
   category: string;
   clientName: string;
+  industry?: string;
   resultStat: string;
+  summary?: string;
+  description?: string;
+  objectives?: string;
+  challenges?: string;
+  solutions?: string;
+  results?: string;
   featuredImage: string;
   galleryImages: string[];
   liveUrl?: string;
   githubUrl?: string;
   technologies: string[];
+  servicesDelivered?: string[];
   caseStudyMarkdown?: string;
+  seoTitle?: string;
+  seoDescription?: string;
+  status?: 'draft' | 'published';
   isFeatured: boolean;
   orderIndex: number;
   createdAt: string;
+  updatedAt?: string;
 }
 
 export interface PricingPlan {

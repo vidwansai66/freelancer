@@ -99,31 +99,19 @@ let tokenState: TokenState = {
   expiresAt: 0,
 };
 
+import { loadJsonFromBestPath, saveJsonToAllPaths } from '../utils/storagePaths';
+
 // Persistent pending sync queue file
-const PENDING_SYNCS_FILE = path.join(os.tmpdir(), 'wp_zoho_pending_syncs.json');
 let inMemoryPendingSyncs: PendingZohoSync[] = [];
 
 export function getPendingZohoSyncs(): PendingZohoSync[] {
   if (inMemoryPendingSyncs.length > 0) return inMemoryPendingSyncs;
-  try {
-    if (fs.existsSync(PENDING_SYNCS_FILE)) {
-      const data = fs.readFileSync(PENDING_SYNCS_FILE, 'utf-8');
-      inMemoryPendingSyncs = JSON.parse(data);
-      if (Array.isArray(inMemoryPendingSyncs)) return inMemoryPendingSyncs;
-    }
-  } catch {
-    // Ignore read errors
-  }
-  inMemoryPendingSyncs = [];
+  inMemoryPendingSyncs = loadJsonFromBestPath<PendingZohoSync[]>('wp_zoho_pending_syncs.json', []);
   return inMemoryPendingSyncs;
 }
 
 export function persistPendingZohoSyncs(): void {
-  try {
-    fs.writeFileSync(PENDING_SYNCS_FILE, JSON.stringify(inMemoryPendingSyncs, null, 2), 'utf-8');
-  } catch {
-    // Ignore write errors
-  }
+  saveJsonToAllPaths('wp_zoho_pending_syncs.json', inMemoryPendingSyncs);
 }
 
 export function queuePendingZohoSync(

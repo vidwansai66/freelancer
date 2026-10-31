@@ -14,7 +14,7 @@ export const PortfolioPage: React.FC = () => {
 
   useEffect(() => {
     projectsApi
-      .getAll({ limit: 100 })
+      .getAll({ limit: 100, status: 'published' })
       .then((res) => {
         setAllProjects(res.data || []);
       })
@@ -48,6 +48,7 @@ export const PortfolioPage: React.FC = () => {
       .getAll({
         category: selectedCategory === 'All' ? undefined : selectedCategory,
         search: searchQuery || undefined,
+        status: 'published',
         limit: 50,
       })
       .then((res) => {

@@ -11,7 +11,7 @@
     "build:server": "npm --prefix server run build",
     "build": "npm run build:client && npm run build:server",
     "seed": "npm --prefix server run seed",
-    "test": "npm run build:server && node --test tests/unit.cjs tests/integration.cjs tests/zoho.test.cjs tests/serverless.test.cjs",
+    "test": "npm run build:server && node --test tests/unit.cjs tests/integration.cjs tests/zoho.test.cjs tests/serverless.test.cjs tests/acceptance_10.test.cjs",
     "test:integration": "npm run build:server && node --test tests/integration.cjs",
     "test:zoho": "npm run build:server && node --test tests/zoho.test.cjs",
     "test:browser": "npm run build && playwright test",

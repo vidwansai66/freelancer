@@ -48,3 +48,7 @@ playwright-report/
 .vercel
 .env*
 backups/
+
+# Runtime data files (except default content store)
+server/data/*.json
+!server/data/wp_content_store.json

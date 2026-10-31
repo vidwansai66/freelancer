@@ -1,8 +1,10 @@
 import { useEffect, useState } from 'react';
 import { useSettings } from '../../context/SettingsContext';
-import { api, settingsApi } from '../../services/api';
+import { api, settingsApi, zohoApi } from '../../services/api';
 import { useAuth } from '../../context/AuthContext';
 import { Field, fieldClass, UploadField } from '../../components/common/Forms';
+import { RefreshCw, CheckCircle2, AlertTriangle, ExternalLink, Zap } from 'lucide-react';
+
 export function StudioSettingsPage() {
   const { settings, refresh } = useSettings();
   const { admin } = useAuth();
@@ -11,6 +13,56 @@ export function StudioSettingsPage() {
     [message, setMessage] = useState(''),
     [error, setError] = useState(''),
     [busy, setBusy] = useState(false);
+
+  // Zoho CRM Diagnostics State
+  const [zohoStatus, setZohoStatus] = useState<any>(null);
+  const [pendingSyncs, setPendingSyncs] = useState<any[]>([]);
+  const [zohoLoading, setZohoLoading] = useState(false);
+  const [zohoFeedback, setZohoFeedback] = useState('');
+
+  const loadZoho = async () => {
+    try {
+      const [status, pending] = await Promise.all([
+        zohoApi.getStatus().catch(() => null),
+        zohoApi.getPending().catch(() => []),
+      ]);
+      setZohoStatus(status);
+      setPendingSyncs(pending || []);
+    } catch {}
+  };
+
+  useEffect(() => {
+    loadZoho();
+  }, []);
+
+  const handleRetryZoho = async () => {
+    setZohoLoading(true);
+    setZohoFeedback('');
+    try {
+      const res = await zohoApi.retrySync();
+      setZohoFeedback(`Sync queue processed: ${res.data?.processed || 0} succeeded, ${res.data?.remaining || 0} remaining.`);
+      loadZoho();
+    } catch (err: any) {
+      setZohoFeedback('Retry failed: ' + (err.response?.data?.error || err.message));
+    } finally {
+      setZohoLoading(false);
+    }
+  };
+
+  const handleTestPing = async () => {
+    setZohoLoading(true);
+    setZohoFeedback('');
+    try {
+      const res = await zohoApi.testLead();
+      setZohoFeedback(res.message || 'Zoho CRM test ping succeeded!');
+      loadZoho();
+    } catch (err: any) {
+      setZohoFeedback('Test ping failed: ' + (err.response?.data?.error || err.message));
+    } finally {
+      setZohoLoading(false);
+    }
+  };
+
   useEffect(() => {
     setForm({
       ...settings,
@@ -28,8 +80,114 @@ export function StudioSettingsPage() {
   if (admin?.role !== 'superadmin') return <p>The studio owner manages website settings.</p>;
   const change = (key: string, value: any) => setForm({ ...form, [key]: value });
   return (
+    <div className="space-y-8 max-w-4xl">
+      {/* ======================================================== */}
+      {/* ZOHO CRM INTEGRATION & DIAGNOSTICS SECTION               */}
+      {/* ======================================================== */}
+      <div className="rounded-2xl border-2 border-[#203C3D]/15 bg-white p-6 shadow-sm space-y-4">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-[#203C3D]/10 pb-4">
+          <div>
+            <div className="flex items-center gap-2.5">
+              <span className="p-1.5 rounded-lg bg-[#FEDAB8] text-[#203C3D]">
+                <Zap className="h-4 w-4" />
+              </span>
+              <h2 className="text-lg font-black text-[#203C3D]">Zoho CRM Integration Status</h2>
+            </div>
+            <p className="text-xs font-bold text-[#4D6768] mt-1">
+              Synchronizes inquiries, quotation requests, and customer consultations directly into Zoho CRM Leads.
+            </p>
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={handleTestPing}
+              disabled={zohoLoading}
+              className="px-3.5 py-1.5 rounded-xl border border-[#203C3D]/25 bg-white hover:bg-zinc-50 text-xs font-black text-[#203C3D] transition-all disabled:opacity-50"
+            >
+              Test Diagnostic Ping
+            </button>
+            <button
+              type="button"
+              onClick={handleRetryZoho}
+              disabled={zohoLoading || pendingSyncs.length === 0}
+              className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-[#203C3D] hover:bg-[#162A2B] text-xs font-black text-[#FEDAB8] transition-all disabled:opacity-40"
+            >
+              <RefreshCw className={`h-3 w-3 ${zohoLoading ? 'animate-spin' : ''}`} />
+              <span>Retry Sync Queue ({pendingSyncs.length})</span>
+            </button>
+          </div>
+        </div>
+
+        {zohoFeedback && (
+          <div className="p-3 rounded-xl bg-[#EDF3F3] border border-[#203C3D]/20 text-xs font-black text-[#203C3D]">
+            {zohoFeedback}
+          </div>
+        )}
+
+        <div className="grid grid-cols-1 sm:grid-cols-4 gap-3 text-xs">
+          <div className="p-3.5 rounded-xl bg-[#FBF9F6] border border-[#203C3D]/10">
+            <span className="text-[10px] font-black uppercase text-[#7A9394]">CRM Provider</span>
+            <p className="text-xs font-black text-[#111E1F] mt-1">Zoho CRM (India DC)</p>
+          </div>
+          <div className="p-3.5 rounded-xl bg-[#FBF9F6] border border-[#203C3D]/10">
+            <span className="text-[10px] font-black uppercase text-[#7A9394]">Destination Module</span>
+            <p className="text-xs font-black text-[#111E1F] mt-1">Leads Module</p>
+          </div>
+          <div className="p-3.5 rounded-xl bg-[#FBF9F6] border border-[#203C3D]/10">
+            <span className="text-[10px] font-black uppercase text-[#7A9394]">Configuration Status</span>
+            <div className="flex items-center gap-1.5 mt-1">
+              <span
+                className={`h-2 w-2 rounded-full ${
+                  zohoStatus?.isConfigured ? 'bg-emerald-500' : 'bg-rose-500'
+                }`}
+              />
+              <span className="font-black text-[#111E1F]">
+                {zohoStatus?.isConfigured ? 'Configured (Active)' : 'Unconfigured'}
+              </span>
+            </div>
+          </div>
+          <div className="p-3.5 rounded-xl bg-[#FBF9F6] border border-[#203C3D]/10">
+            <span className="text-[10px] font-black uppercase text-[#7A9394]">OAuth Token Status</span>
+            <div className="flex items-center gap-1.5 mt-1">
+              <span
+                className={`h-2 w-2 rounded-full ${
+                  zohoStatus?.isAuthorized ? 'bg-emerald-500' : 'bg-amber-500'
+                }`}
+              />
+              <span className="font-black text-[#111E1F]">
+                {zohoStatus?.isAuthorized ? 'Authorized (Healthy)' : 'Pending OAuth'}
+              </span>
+            </div>
+          </div>
+        </div>
+
+        {/* Pending Queue Table if any */}
+        {pendingSyncs.length > 0 && (
+          <div className="pt-2">
+            <h4 className="text-xs font-black text-[#203C3D] uppercase tracking-wider mb-2">
+              Queued Recoverable Submissions ({pendingSyncs.length})
+            </h4>
+            <div className="rounded-xl border border-amber-300 bg-amber-50/50 p-3 space-y-2">
+              {pendingSyncs.map((item, idx) => (
+                <div key={idx} className="flex items-center justify-between text-xs text-[#203C3D] border-b border-amber-200/50 pb-1.5 last:border-0 last:pb-0">
+                  <div className="flex items-center gap-2">
+                    <span className="px-2 py-0.5 rounded bg-amber-200 text-amber-900 font-bold text-[10px] uppercase">
+                      {item.type}
+                    </span>
+                    <span className="font-bold">{item.payload?.email || item.payload?.clientEmail || 'Client submission'}</span>
+                  </div>
+                  <span className="text-[10px] text-amber-800">
+                    Attempts: {item.attempts || 1} · {item.lastError || 'Queued for retry'}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
+
     <form
-      className="max-w-3xl space-y-5"
+      className="max-w-4xl space-y-5"
       onSubmit={async (e) => {
         e.preventDefault();
         setBusy(true);
@@ -199,6 +357,7 @@ export function StudioSettingsPage() {
         {busy ? 'Saving…' : 'Save settings'}
       </button>
     </form>
+    </div>
   );
 }
 export function AdminUsersPage() {

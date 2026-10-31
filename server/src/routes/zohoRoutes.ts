@@ -334,6 +334,15 @@ router.post('/process-queue', authenticateAdmin, async (_req: Request, res: Resp
   }
 });
 
+router.post('/retry', authenticateAdmin, async (_req: Request, res: Response) => {
+  try {
+    const result = await processPendingZohoSyncs();
+    sendSuccess(res, result, `Processed ${result.processed} items (${result.succeeded} succeeded, ${result.failed} failed).`);
+  } catch (err: any) {
+    sendError(res, `Failed to process queue: ${err.message}`, 500);
+  }
+});
+
 /**
  * POST /api/zoho/test (and /api/zoho/diagnostic)
  * Protected admin diagnostic endpoint that:

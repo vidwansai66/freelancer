@@ -95,13 +95,24 @@ const objects: Record<string, z.ZodObject<any>> = {
     slug: text.optional(),
     category: text.min(1),
     clientName: text.optional(),
+    industry: text.optional(),
     resultStat: text.optional(),
+    summary: long.optional(),
+    description: long.optional(),
+    objectives: long.optional(),
+    challenges: long.optional(),
+    solutions: long.optional(),
+    results: long.optional(),
     featuredImage: image,
     galleryImages: z.array(image).max(30).optional(),
     liveUrl: url.optional(),
     githubUrl: url.optional(),
     technologies: stringList.optional(),
+    servicesDelivered: stringList.optional(),
     caseStudyMarkdown: long.optional(),
+    seoTitle: text.optional(),
+    seoDescription: long.optional(),
+    status: z.enum(['draft', 'published']).optional(),
     isFeatured: z.boolean().optional(),
     orderIndex: count.optional(),
   }),
@@ -250,7 +261,7 @@ export const apiValidation = (req: Request, res: Response, next: NextFunction) =
     if (module === 'testimonials' && id === 'admin') schema = objects.testimonials;
     if (module === 'testimonials' && action === 'approve')
       schema = z.object({ isApproved: z.boolean().optional(), isFeatured: z.boolean().optional() });
-    if (module === 'settings') schema = settings;
+    if (module === 'settings') schema = req.method === 'PUT' ? settings.partial() : settings;
     if (module === 'auth' && id === 'login')
       schema = z.object({ email, password: z.string().min(1).max(200) });
     if (module === 'auth' && id === 'profile')

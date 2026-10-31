@@ -28,32 +28,17 @@ export interface LocalClientProject {
   updatedAt?: string;
 }
 
-const CLIENT_PROJECTS_FILE = path.join(os.tmpdir(), 'wp_client_projects.json');
+import { loadJsonFromBestPath, saveJsonToAllPaths } from '../utils/storagePaths';
 
 let inMemoryClientProjects: LocalClientProject[] = [];
 
 const loadClientProjects = (): LocalClientProject[] => {
-  try {
-    if (fs.existsSync(CLIENT_PROJECTS_FILE)) {
-      const data = fs.readFileSync(CLIENT_PROJECTS_FILE, 'utf-8');
-      const parsed = JSON.parse(data);
-      if (Array.isArray(parsed) && parsed.length > 0) {
-        inMemoryClientProjects = parsed;
-        return inMemoryClientProjects;
-      }
-    }
-  } catch {
-    // Ignore read errors
-  }
+  inMemoryClientProjects = loadJsonFromBestPath<LocalClientProject[]>('wp_client_projects.json', inMemoryClientProjects);
   return inMemoryClientProjects;
 };
 
 const persistClientProjects = (): void => {
-  try {
-    fs.writeFileSync(CLIENT_PROJECTS_FILE, JSON.stringify(inMemoryClientProjects, null, 2), 'utf-8');
-  } catch {
-    // Ignore write errors
-  }
+  saveJsonToAllPaths('wp_client_projects.json', inMemoryClientProjects);
 };
 
 const router = asyncRouter();

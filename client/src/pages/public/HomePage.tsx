@@ -48,7 +48,7 @@ export const HomePage: React.FC = () => {
         const [servData, projData, priceData, faqData, testData] = await Promise.all([
           servicesApi.getAll().catch(() => []),
           projectsApi
-            .getAll({ limit: 3 })
+            .getAll({ limit: 3, status: 'published', featured: true })
             .then((res) => res.data)
             .catch(() => []),
           pricingApi.getAll().catch(() => []),

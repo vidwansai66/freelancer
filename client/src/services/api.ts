@@ -66,232 +66,55 @@ export const servicesApi = {
   delete: (id: string) => api.delete(`/services/${id}`).then((res) => res.data.data),
 };
 
-const STORAGE_CUSTOM_PROJECTS = 'studio_custom_projects';
-const STORAGE_DELETED_PROJECTS = 'studio_deleted_project_ids';
-
-const getCustomProjects = (): any[] => {
-  try {
-    const raw = localStorage.getItem(STORAGE_CUSTOM_PROJECTS);
-    return raw ? JSON.parse(raw) : [];
-  } catch {
-    return [];
-  }
-};
-
-const saveCustomProjects = (projects: any[]): void => {
-  try {
-    localStorage.setItem(STORAGE_CUSTOM_PROJECTS, JSON.stringify(projects));
-  } catch {}
-};
-
-const getDeletedProjectIds = (): string[] => {
-  try {
-    const raw = localStorage.getItem(STORAGE_DELETED_PROJECTS);
-    return raw ? JSON.parse(raw) : [];
-  } catch {
-    return [];
-  }
-};
-
-const addDeletedProjectId = (id: string): void => {
-  try {
-    const deleted = getDeletedProjectIds();
-    if (!deleted.includes(id)) {
-      deleted.push(id);
-      localStorage.setItem(STORAGE_DELETED_PROJECTS, JSON.stringify(deleted));
-    }
-  } catch {}
-};
-
-const sortProjectsList = (list: any[]): any[] => {
-  return [...list].sort((a, b) => {
-    const featA = a.isFeatured ? 1 : 0;
-    const featB = b.isFeatured ? 1 : 0;
-    if (featA !== featB) return featB - featA;
-
-    const ordA = a.orderIndex !== undefined && a.orderIndex !== null ? Number(a.orderIndex) : 999;
-    const ordB = b.orderIndex !== undefined && b.orderIndex !== null ? Number(b.orderIndex) : 999;
-    if (ordA !== ordB) return ordA - ordB;
-
-    const timeA = new Date(a.createdAt || 0).getTime();
-    const timeB = new Date(b.createdAt || 0).getTime();
-    return timeB - timeA;
-  });
-};
-
 export const projectsApi = {
-  getAll: async (params?: { category?: string; search?: string; page?: number; limit?: number }) => {
-    let serverProjects: any[] = [];
-    try {
-      const res = await api.get('/projects', { params: { limit: 100 } });
-      serverProjects = res.data?.data || [];
-    } catch {
-      serverProjects = [];
-    }
-
-    const customProjects = getCustomProjects();
-    const deletedIds = new Set(getDeletedProjectIds());
-
-    // Auto-persist server projects to localStorage so they survive any server restart or cold lambda
-    if (serverProjects.length > 0) {
-      const existingIds = new Set(customProjects.map((p) => p._id || p.id));
-      const newItems = serverProjects.filter(
-        (sp) =>
-          !deletedIds.has(sp._id) &&
-          !deletedIds.has(sp.slug) &&
-          !existingIds.has(sp._id || sp.id) &&
-          !customProjects.some((cp) => cp.slug === sp.slug),
-      );
-      if (newItems.length > 0) {
-        saveCustomProjects([...customProjects, ...newItems]);
-      }
-    }
-
-    const currentCustom = getCustomProjects();
-    const validCustom = currentCustom.filter(
-      (p) => !deletedIds.has(p._id) && !deletedIds.has(p.id) && !deletedIds.has(p.slug),
-    );
-
-    const customIds = new Set(validCustom.map((p) => p._id || p.id));
-    const customSlugs = new Set(validCustom.map((p) => p.slug));
-
-    const merged: any[] = [...validCustom];
-    for (const sp of serverProjects) {
-      const spId = sp._id || sp.id;
-      if (deletedIds.has(spId) || deletedIds.has(sp.slug)) continue;
-      if (customIds.has(spId) || customSlugs.has(sp.slug)) continue;
-      merged.push(sp);
-    }
-
-    let filtered = sortProjectsList(merged);
-
-    if (params?.category && params.category !== 'All') {
-      const catLower = params.category.toLowerCase().trim();
-      filtered = filtered.filter((p) => (p.category || '').toLowerCase().trim() === catLower);
-    }
-
-    if (params?.search) {
-      const q = params.search.toLowerCase().trim();
-      filtered = filtered.filter(
-        (p) =>
-          (p.title || '').toLowerCase().includes(q) ||
-          (p.category || '').toLowerCase().includes(q) ||
-          (p.clientName || '').toLowerCase().includes(q) ||
-          (Array.isArray(p.technologies) && p.technologies.some((t: string) => t.toLowerCase().includes(q))),
-      );
-    }
-
-    const total = filtered.length;
-    const page = Number(params?.page) || 1;
-    const limit = Number(params?.limit) || 20;
-    const paginated = filtered.slice((page - 1) * limit, (page - 1) * limit + limit);
-    const totalPages = Math.ceil(total / limit) || 1;
-
+  getAll: async (params?: {
+    category?: string;
+    search?: string;
+    page?: number;
+    limit?: number;
+    status?: string;
+    featured?: boolean | string;
+  }) => {
+    const res = await api.get('/projects', { params });
+    const data = res.data?.data || [];
+    const meta = res.data?.meta || {
+      total: data.length,
+      page: params?.page || 1,
+      limit: params?.limit || data.length,
+      totalPages: 1,
+    };
     return {
-      data: paginated,
-      total,
-      page,
-      totalPages,
-      meta: {
-        total,
-        page,
-        limit,
-        totalPages,
-      },
+      data,
+      total: meta.total,
+      page: meta.page,
+      totalPages: meta.totalPages,
+      meta,
     };
   },
 
   getBySlug: async (slug: string) => {
-    const deletedIds = new Set(getDeletedProjectIds());
-    if (deletedIds.has(slug)) {
-      throw new Error('Project not found');
-    }
-
-    const custom = getCustomProjects().find((p) => p.slug === slug || p._id === slug);
-    if (custom && !deletedIds.has(custom._id)) {
-      return custom;
-    }
-
-    try {
-      const res = await api.get(`/projects/${slug}`);
-      const project = res.data?.data;
-      if (project && (deletedIds.has(project._id) || deletedIds.has(project.slug))) {
-        throw new Error('Project not found');
-      }
-      return project;
-    } catch (err) {
-      if (custom) return custom;
-      throw err;
-    }
+    const res = await api.get(`/projects/${slug}`);
+    return res.data?.data;
   },
 
   create: async (data: any) => {
-    let created: any = null;
-    try {
-      const res = await api.post('/projects', data, { skipGlobalError: true } as any);
-      created = res.data?.data;
-    } catch (err: any) {
-      created = {
-        _id: `prj-${Date.now().toString(36)}`,
-        title: data.title || 'New Project',
-        slug: (data.title || 'project').toLowerCase().replace(/[^a-z0-9]+/g, '-') + `-${Date.now().toString(36)}`,
-        category: data.category || 'Web Application',
-        clientName: data.clientName || data.title,
-        resultStat: data.resultStat || '',
-        featuredImage: data.featuredImage || '',
-        galleryImages: data.galleryImages || [data.featuredImage],
-        liveUrl: data.liveUrl || '',
-        githubUrl: data.githubUrl || '',
-        technologies: data.technologies || ['Web Studio', 'React'],
-        caseStudyMarkdown: data.caseStudyMarkdown || `### ${data.title}`,
-        isFeatured: data.isFeatured !== false,
-        orderIndex: 0,
-        createdAt: new Date().toISOString(),
-      };
-    }
-
-    if (created) {
-      const custom = getCustomProjects();
-      const updated = [created, ...custom.filter((p) => p._id !== created._id && p.slug !== created.slug)];
-      saveCustomProjects(updated);
-    }
-    return created;
+    const res = await api.post('/projects', data);
+    return res.data?.data;
   },
 
   update: async (id: string, data: any) => {
-    let updated: any = null;
-    try {
-      const res = await api.put(`/projects/${id}`, data, { skipGlobalError: true } as any);
-      updated = res.data?.data;
-    } catch {}
+    const res = await api.put(`/projects/${id}`, data);
+    return res.data?.data;
+  },
 
-    const custom = getCustomProjects();
-    const existingIdx = custom.findIndex((p) => p._id === id || p.slug === id);
-    if (existingIdx !== -1) {
-      custom[existingIdx] = { ...custom[existingIdx], ...data, ...(updated || {}) };
-      saveCustomProjects(custom);
-      return custom[existingIdx];
-    } else if (updated) {
-      saveCustomProjects([updated, ...custom]);
-      return updated;
-    } else {
-      const fallback = { _id: id, ...data };
-      saveCustomProjects([fallback, ...custom]);
-      return fallback;
-    }
+  reorder: async (orders: Array<{ id: string; orderIndex: number }>) => {
+    const res = await api.put('/projects/reorder', { orders });
+    return res.data?.data;
   },
 
   delete: async (id: string) => {
-    addDeletedProjectId(id);
-    const custom = getCustomProjects().filter((p) => p._id !== id && p.slug !== id);
-    saveCustomProjects(custom);
-
-    try {
-      await api.delete(`/projects/${id}`);
-    } catch {
-      // Soft-delete persists via localStorage
-    }
-    return { success: true };
+    const res = await api.delete(`/projects/${id}`);
+    return res.data?.data || { success: true };
   },
 };
 
@@ -390,4 +213,11 @@ export const dashboardApi = {
 export const settingsApi = {
   get: () => api.get('/settings').then((res) => res.data.data),
   update: (data: any) => api.put('/settings', data).then((res) => res.data.data),
+};
+
+export const zohoApi = {
+  getStatus: () => api.get('/zoho/status').then((res) => res.data.data),
+  getPending: () => api.get('/zoho/pending').then((res) => res.data.data),
+  retrySync: () => api.post('/zoho/retry').then((res) => res.data),
+  testLead: () => api.post('/zoho/test').then((res) => res.data),
 };

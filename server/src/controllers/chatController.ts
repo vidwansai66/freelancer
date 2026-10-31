@@ -24,26 +24,24 @@ export interface ChatSession {
   lastMessageAt: Date;
 }
 
-const CHATS_FILE = path.join(os.tmpdir(), 'wp_chats.json');
+import { loadJsonFromBestPath, saveJsonToAllPaths } from '../utils/storagePaths';
+
 const inMemoryChatSessions: Map<string, ChatSession> = new Map();
 
 const loadChatSessionsFromDisk = (): void => {
   try {
-    if (fs.existsSync(CHATS_FILE)) {
-      const raw = fs.readFileSync(CHATS_FILE, 'utf-8');
-      const parsed: ChatSession[] = JSON.parse(raw);
-      if (Array.isArray(parsed)) {
-        for (const item of parsed) {
-          if (item && item.sessionId && !inMemoryChatSessions.has(item.sessionId)) {
-            inMemoryChatSessions.set(item.sessionId, {
-              ...item,
-              lastMessageAt: new Date(item.lastMessageAt || Date.now()),
-              messages: (item.messages || []).map((m) => ({
-                ...m,
-                sentAt: new Date(m.sentAt || Date.now()),
-              })),
-            });
-          }
+    const parsed = loadJsonFromBestPath<ChatSession[]>('wp_chats.json', []);
+    if (Array.isArray(parsed)) {
+      for (const item of parsed) {
+        if (item && item.sessionId && !inMemoryChatSessions.has(item.sessionId)) {
+          inMemoryChatSessions.set(item.sessionId, {
+            ...item,
+            lastMessageAt: new Date(item.lastMessageAt || Date.now()),
+            messages: (item.messages || []).map((m) => ({
+              ...m,
+              sentAt: new Date(m.sentAt || Date.now()),
+            })),
+          });
         }
       }
     }
@@ -55,7 +53,7 @@ const loadChatSessionsFromDisk = (): void => {
 const persistChatSessions = (): void => {
   try {
     const list = Array.from(inMemoryChatSessions.values());
-    fs.writeFileSync(CHATS_FILE, JSON.stringify(list, null, 2), 'utf-8');
+    saveJsonToAllPaths('wp_chats.json', list);
   } catch {
     // Ignore write errors in restricted environments
   }

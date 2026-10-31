@@ -15,30 +15,7 @@ import {
   StudioSettings,
 } from '../data/content';
 import { randomUUID } from 'crypto';
-import fs from 'fs';
-import path from 'path';
-import os from 'os';
-
-const getStorageFilePaths = (): string[] => {
-  const list: string[] = [];
-  const baseDataDir = process.cwd().endsWith('server')
-    ? path.join(process.cwd(), 'data')
-    : path.join(process.cwd(), 'server', 'data');
-
-  try {
-    if (!fs.existsSync(baseDataDir)) fs.mkdirSync(baseDataDir, { recursive: true });
-    list.push(path.join(baseDataDir, 'wp_content_store.json'));
-  } catch {}
-
-  try {
-    const relData = path.resolve(__dirname, '..', '..', 'data');
-    if (!fs.existsSync(relData)) fs.mkdirSync(relData, { recursive: true });
-    list.push(path.join(relData, 'wp_content_store.json'));
-  } catch {}
-
-  list.push(path.join(os.tmpdir(), 'wp_content_store.json'));
-  return Array.from(new Set(list));
-};
+import { loadJsonFromBestPath, saveJsonToAllPaths } from '../utils/storagePaths';
 
 class ContentStore {
   private services: ServiceItem[] = [...servicesData];
@@ -55,52 +32,28 @@ class ContentStore {
   }
 
   private loadFromDisk(): void {
-    const paths = getStorageFilePaths();
-    for (const filePath of paths) {
-      try {
-        if (fs.existsSync(filePath)) {
-          const raw = fs.readFileSync(filePath, 'utf-8');
-          const parsed = JSON.parse(raw);
-          if (parsed) {
-            if (Array.isArray(parsed.services) && parsed.services.length > 0) this.services = parsed.services;
-            if (Array.isArray(parsed.projects) && parsed.projects.length > 0) this.projects = parsed.projects;
-            if (Array.isArray(parsed.pricingPlans) && parsed.pricingPlans.length > 0) this.pricingPlans = parsed.pricingPlans;
-            if (Array.isArray(parsed.faqs) && parsed.faqs.length > 0) this.faqs = parsed.faqs;
-            if (Array.isArray(parsed.testimonials) && parsed.testimonials.length > 0) this.testimonials = parsed.testimonials;
-            if (Array.isArray(parsed.blogPosts) && parsed.blogPosts.length > 0) this.blogPosts = parsed.blogPosts;
-            if (parsed.settings) this.settings = { ...this.settings, ...parsed.settings };
-            return;
-          }
-        }
-      } catch {
-        // Try next candidate
-      }
+    const parsed = loadJsonFromBestPath<any>('wp_content_store.json', null);
+    if (parsed) {
+      if (Array.isArray(parsed.services) && parsed.services.length > 0) this.services = parsed.services;
+      if (Array.isArray(parsed.projects) && parsed.projects.length > 0) this.projects = parsed.projects;
+      if (Array.isArray(parsed.pricingPlans) && parsed.pricingPlans.length > 0) this.pricingPlans = parsed.pricingPlans;
+      if (Array.isArray(parsed.faqs) && parsed.faqs.length > 0) this.faqs = parsed.faqs;
+      if (Array.isArray(parsed.testimonials) && parsed.testimonials.length > 0) this.testimonials = parsed.testimonials;
+      if (Array.isArray(parsed.blogPosts) && parsed.blogPosts.length > 0) this.blogPosts = parsed.blogPosts;
+      if (parsed.settings) this.settings = { ...this.settings, ...parsed.settings };
     }
   }
 
   private saveToDisk(): void {
-    const payload = JSON.stringify(
-      {
-        services: this.services,
-        projects: this.projects,
-        pricingPlans: this.pricingPlans,
-        faqs: this.faqs,
-        testimonials: this.testimonials,
-        blogPosts: this.blogPosts,
-        settings: this.settings,
-      },
-      null,
-      2,
-    );
-
-    const paths = getStorageFilePaths();
-    for (const filePath of paths) {
-      try {
-        fs.writeFileSync(filePath, payload, 'utf-8');
-      } catch {
-        // Ignore write error for read-only filesystem paths
-      }
-    }
+    saveJsonToAllPaths('wp_content_store.json', {
+      services: this.services,
+      projects: this.projects,
+      pricingPlans: this.pricingPlans,
+      faqs: this.faqs,
+      testimonials: this.testimonials,
+      blogPosts: this.blogPosts,
+      settings: this.settings,
+    });
   }
 
   // Services
@@ -159,24 +112,44 @@ class ContentStore {
   }
 
   // Projects
-  getProjects(params?: { category?: string; search?: string; page?: number; limit?: number; featured?: string | boolean }) {
+  getProjects(params?: {
+    category?: string;
+    search?: string;
+    page?: number;
+    limit?: number;
+    featured?: string | boolean;
+    status?: string;
+  }) {
     this.loadFromDisk();
     let list = [...this.projects];
+
+    // Status filter: by default (for public), exclude drafts unless status is 'all' or 'draft'
+    if (params?.status === 'draft') {
+      list = list.filter((p) => p.status === 'draft');
+    } else if (params?.status === 'all') {
+      // return all projects including drafts
+    } else {
+      // default: only published projects
+      list = list.filter((p) => p.status !== 'draft');
+    }
+
     if (params?.featured !== undefined) {
       const want = String(params.featured) === 'true';
       list = list.filter((p) => Boolean(p.isFeatured) === want);
     }
     if (params?.category && params.category !== 'All') {
       const catLower = params.category.toLowerCase().trim();
-      list = list.filter((p) => p.category.toLowerCase().trim() === catLower);
+      list = list.filter((p) => (p.category || '').toLowerCase().trim() === catLower);
     }
     if (params?.search) {
       const q = params.search.toLowerCase().trim();
       list = list.filter(
         (p) =>
-          p.title.toLowerCase().includes(q) ||
-          p.category.toLowerCase().includes(q) ||
-          p.clientName.toLowerCase().includes(q) ||
+          (p.title || '').toLowerCase().includes(q) ||
+          (p.category || '').toLowerCase().includes(q) ||
+          (p.clientName || '').toLowerCase().includes(q) ||
+          (p.industry || '').toLowerCase().includes(q) ||
+          (p.summary || '').toLowerCase().includes(q) ||
           (Array.isArray(p.technologies) && p.technologies.some((t) => t.toLowerCase().includes(q))),
       );
     }
@@ -213,9 +186,14 @@ class ContentStore {
     };
   }
 
-  getProjectBySlug(slug: string): ProjectItem | undefined {
+  getProjectBySlug(slug: string, allowDraft = false): ProjectItem | undefined {
     this.loadFromDisk();
-    return this.projects.find((p) => p.slug === slug || p._id === slug);
+    const p = this.projects.find((item) => item.slug === slug || item._id === slug);
+    if (!p) return undefined;
+    if (p.status === 'draft' && !allowDraft) {
+      return undefined;
+    }
+    return p;
   }
 
   getProjectById(id: string): ProjectItem | undefined {
@@ -231,16 +209,28 @@ class ContentStore {
       slug: data.slug || `project-${Date.now()}`,
       category: data.category || 'Web Application',
       clientName: data.clientName || '',
+      industry: data.industry || '',
       resultStat: data.resultStat || '',
+      summary: data.summary || '',
+      description: data.description || '',
+      objectives: data.objectives || '',
+      challenges: data.challenges || '',
+      solutions: data.solutions || '',
+      results: data.results || '',
       featuredImage: data.featuredImage || '',
       galleryImages: Array.isArray(data.galleryImages) ? data.galleryImages : [],
       liveUrl: data.liveUrl || '',
       githubUrl: data.githubUrl || '',
       technologies: Array.isArray(data.technologies) ? data.technologies : [],
+      servicesDelivered: Array.isArray(data.servicesDelivered) ? data.servicesDelivered : [],
       caseStudyMarkdown: data.caseStudyMarkdown || '',
+      seoTitle: data.seoTitle || '',
+      seoDescription: data.seoDescription || '',
+      status: data.status === 'draft' ? 'draft' : 'published',
       isFeatured: data.isFeatured !== undefined ? Boolean(data.isFeatured) : true,
       orderIndex: data.orderIndex !== undefined && Number(data.orderIndex) >= 0 ? Number(data.orderIndex) : 0,
       createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
     };
     // Prepend new project so it immediately shows at the top
     this.projects.unshift(newProject);
@@ -252,9 +242,28 @@ class ContentStore {
     this.loadFromDisk();
     const index = this.projects.findIndex((p) => p._id === id || p.slug === id);
     if (index === -1) return undefined;
-    this.projects[index] = { ...this.projects[index], ...data };
+    this.projects[index] = {
+      ...this.projects[index],
+      ...data,
+      updatedAt: new Date().toISOString(),
+    };
     this.saveToDisk();
     return this.projects[index];
+  }
+
+  reorderProjects(orders: Array<{ id: string; orderIndex: number }>): boolean {
+    this.loadFromDisk();
+    const orderMap = new Map<string, number>();
+    for (const item of orders) {
+      orderMap.set(item.id, item.orderIndex);
+    }
+    for (const p of this.projects) {
+      if (orderMap.has(p._id)) {
+        p.orderIndex = orderMap.get(p._id)!;
+      }
+    }
+    this.saveToDisk();
+    return true;
   }
 
   deleteProject(id: string): boolean {

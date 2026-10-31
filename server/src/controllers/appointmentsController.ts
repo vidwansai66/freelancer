@@ -83,19 +83,14 @@ const getInitialSeedAppointments = (): LocalAppointment[] => {
 
 let inMemoryAppointments: LocalAppointment[] = [];
 
+import { loadJsonFromBestPath, saveJsonToAllPaths } from '../utils/storagePaths';
+
 // Load persisted appointments from file if available, otherwise initialize with seed
 const loadAppointments = (): LocalAppointment[] => {
-  try {
-    if (fs.existsSync(APPOINTMENTS_FILE)) {
-      const data = fs.readFileSync(APPOINTMENTS_FILE, 'utf-8');
-      const parsed = JSON.parse(data);
-      if (Array.isArray(parsed) && parsed.length > 0) {
-        inMemoryAppointments = parsed;
-        return inMemoryAppointments;
-      }
-    }
-  } catch {
-    // Fall back to memory on file read errors
+  const loaded = loadJsonFromBestPath<LocalAppointment[]>('wp_appointments.json', []);
+  if (Array.isArray(loaded) && loaded.length > 0) {
+    inMemoryAppointments = loaded;
+    return inMemoryAppointments;
   }
   if (inMemoryAppointments.length > 0) {
     return inMemoryAppointments;
@@ -106,11 +101,7 @@ const loadAppointments = (): LocalAppointment[] => {
 };
 
 const persistAppointments = (): void => {
-  try {
-    fs.writeFileSync(APPOINTMENTS_FILE, JSON.stringify(inMemoryAppointments, null, 2), 'utf-8');
-  } catch {
-    // Ignore disk write errors in locked environments
-  }
+  saveJsonToAllPaths('wp_appointments.json', inMemoryAppointments);
 };
 
 // Exported getter for other controllers (e.g. dashboardController)

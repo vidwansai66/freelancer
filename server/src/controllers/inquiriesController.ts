@@ -13,6 +13,8 @@ import fs from 'fs';
 import path from 'path';
 import os from 'os';
 
+import { loadJsonFromBestPath, saveJsonToAllPaths } from '../utils/storagePaths';
+
 export interface LocalInquiry {
   _id: string;
   name: string;
@@ -29,31 +31,15 @@ export interface LocalInquiry {
   zohoLeadId?: string;
 }
 
-const INQUIRIES_FILE = path.join(os.tmpdir(), 'wp_inquiries.json');
 let inMemoryInquiries: LocalInquiry[] = [];
 
 const loadInquiries = (): LocalInquiry[] => {
-  try {
-    if (fs.existsSync(INQUIRIES_FILE)) {
-      const data = fs.readFileSync(INQUIRIES_FILE, 'utf-8');
-      const parsed = JSON.parse(data);
-      if (Array.isArray(parsed)) {
-        inMemoryInquiries = parsed;
-        return inMemoryInquiries;
-      }
-    }
-  } catch {
-    // Ignore read errors
-  }
+  inMemoryInquiries = loadJsonFromBestPath<LocalInquiry[]>('wp_inquiries.json', inMemoryInquiries);
   return inMemoryInquiries;
 };
 
 const persistInquiries = (): void => {
-  try {
-    fs.writeFileSync(INQUIRIES_FILE, JSON.stringify(inMemoryInquiries, null, 2), 'utf-8');
-  } catch {
-    // Ignore write errors
-  }
+  saveJsonToAllPaths('wp_inquiries.json', inMemoryInquiries);
 };
 
 loadInquiries();
