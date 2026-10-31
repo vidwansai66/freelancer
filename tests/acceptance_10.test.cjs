@@ -310,6 +310,42 @@ test('TEST 8: Persisted data remains intact across queries and simulated reload'
 });
 
 // -------------------------------------------------------------
+// TEST 8B: Parallel repeated queries prove 100% portfolio determinism
+// -------------------------------------------------------------
+test('TEST 8B: Parallel repeated queries return identical, authoritative portfolio state with no test remnants', async () => {
+  // Execute 20 simultaneous queries to simulate heavy refresh traffic across instances
+  const fetches = Array.from({ length: 20 }, () => apiRequest('GET', '/api/projects'));
+  const results = await Promise.all(fetches);
+
+  const deletedIds = new Set(['prj-b516e7ab', 'prj-55c57151', 'prj-6e23dd3a', 'prj-eb7f0c22']);
+  const firstData = results[0].data.data;
+  assert.ok(Array.isArray(firstData) && firstData.length >= 1, 'Projects array must not be empty');
+
+  // Verify College Dashboard is present and featured
+  const collegeProj = firstData.find((p) => p.slug === 'college-dashboard' || p.title === 'College Dashboard');
+  assert.ok(collegeProj, 'Authoritative College Dashboard project must be present');
+
+  for (let i = 0; i < results.length; i++) {
+    const res = results[i];
+    assert.equal(res.status, 200);
+    // Verify Cache-Control header prevents stale caching
+    const cc = res.headers.get('cache-control') || '';
+    assert.ok(cc.includes('no-store') || cc.includes('no-cache'), 'Cache-Control must enforce no-cache');
+
+    const list = res.data.data;
+    assert.equal(list.length, firstData.length, `Iteration ${i} project length mismatch`);
+
+    // Verify ordering is perfectly deterministic
+    for (let j = 0; j < list.length; j++) {
+      assert.equal(list[j]._id, firstData[j]._id, `Ordering mismatch at index ${j} in query ${i}`);
+      assert.ok(!deletedIds.has(list[j]._id), `Deleted test project ${list[j]._id} reappeared!`);
+      assert.ok(list[j].featuredImage, `Project ${list[j].title} has no featuredImage`);
+      assert.ok(!list[j].featuredImage.startsWith('data:image/'), `Project ${list[j].title} still uses bloated base64 image`);
+    }
+  }
+});
+
+// -------------------------------------------------------------
 // TEST 9: Security checks (Unauthorized mutations rejected)
 // -------------------------------------------------------------
 test('TEST 9: Protected endpoints reject unauthorized access with 401', async () => {

@@ -19,6 +19,16 @@ import settingsRoutes from './settingsRoutes';
 import zohoRoutes from './zohoRoutes';
 
 const router = asyncRouter();
+
+// Enforce fresh, deterministic responses across all CDNs and browsers
+router.use((_req, res, next) => {
+  res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+  res.setHeader('Pragma', 'no-cache');
+  res.setHeader('Expires', '0');
+  res.setHeader('Surrogate-Control', 'no-store');
+  next();
+});
+
 router.use(apiValidation);
 router.use('/files', filesRoutes);
 router.use('/client-projects', clientProjectsRoutes);

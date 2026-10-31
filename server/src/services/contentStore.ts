@@ -34,12 +34,12 @@ class ContentStore {
   private loadFromDisk(): void {
     const parsed = loadJsonFromBestPath<any>('wp_content_store.json', null);
     if (parsed) {
-      if (Array.isArray(parsed.services) && parsed.services.length > 0) this.services = parsed.services;
-      if (Array.isArray(parsed.projects) && parsed.projects.length > 0) this.projects = parsed.projects;
-      if (Array.isArray(parsed.pricingPlans) && parsed.pricingPlans.length > 0) this.pricingPlans = parsed.pricingPlans;
-      if (Array.isArray(parsed.faqs) && parsed.faqs.length > 0) this.faqs = parsed.faqs;
-      if (Array.isArray(parsed.testimonials) && parsed.testimonials.length > 0) this.testimonials = parsed.testimonials;
-      if (Array.isArray(parsed.blogPosts) && parsed.blogPosts.length > 0) this.blogPosts = parsed.blogPosts;
+      if (Array.isArray(parsed.services)) this.services = parsed.services;
+      if (Array.isArray(parsed.projects)) this.projects = parsed.projects;
+      if (Array.isArray(parsed.pricingPlans)) this.pricingPlans = parsed.pricingPlans;
+      if (Array.isArray(parsed.faqs)) this.faqs = parsed.faqs;
+      if (Array.isArray(parsed.testimonials)) this.testimonials = parsed.testimonials;
+      if (Array.isArray(parsed.blogPosts)) this.blogPosts = parsed.blogPosts;
       if (parsed.settings) this.settings = { ...this.settings, ...parsed.settings };
     }
   }

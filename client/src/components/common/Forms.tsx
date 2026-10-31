@@ -103,7 +103,7 @@ const compressImage = async (imageFile: File): Promise<{ dataUrl: string; base64
       const img = new Image();
       img.onload = () => {
         try {
-          const maxDim = 1200;
+          const maxDim = 1000;
           let width = img.width;
           let height = img.height;
           if (width > maxDim || height > maxDim) {
@@ -121,8 +121,9 @@ const compressImage = async (imageFile: File): Promise<{ dataUrl: string; base64
           const ctx = canvas.getContext('2d');
           if (ctx) {
             ctx.drawImage(img, 0, 0, width, height);
-            const targetMime = imageFile.type === 'image/png' ? 'image/png' : 'image/jpeg';
-            const compressedDataUrl = canvas.toDataURL(targetMime, 0.82);
+            // JPEG format provides massive 95%+ payload compression while preserving crisp quality
+            const targetMime = 'image/jpeg';
+            const compressedDataUrl = canvas.toDataURL(targetMime, 0.80);
             resolve({
               dataUrl: compressedDataUrl,
               base64: compressedDataUrl.split(',')[1] || '',

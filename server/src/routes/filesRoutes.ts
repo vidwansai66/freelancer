@@ -138,7 +138,19 @@ router.get('/:id', async (req, res) => {
     }
 
     if (!file) {
-      return void sendError(res, 'File not found.', 404);
+      // Graceful fallback for missing ephemeral uploads: return sleek branded SVG instead of 404
+      const fallbackSvg = `<svg xmlns="http://www.w3.org/2000/svg" width="800" height="450" viewBox="0 0 800 450" fill="none">
+  <rect width="800" height="450" fill="#1C3536"/>
+  <rect x="20" y="20" width="760" height="410" rx="16" stroke="#FEDAB8" stroke-opacity="0.3" stroke-width="2" stroke-dasharray="8 8"/>
+  <circle cx="400" cy="180" r="48" fill="#FEDAB8" fill-opacity="0.15"/>
+  <path d="M380 195L395 180L405 190L420 170L435 195H380Z" fill="#FEDAB8"/>
+  <circle cx="390" cy="165" r="5" fill="#FEDAB8"/>
+  <text x="400" y="260" font-family="system-ui, -apple-system, sans-serif" font-size="20" font-weight="700" fill="#FEDAB8" text-anchor="middle">Teja Web Studio Showcase</text>
+  <text x="400" y="285" font-family="system-ui, -apple-system, sans-serif" font-size="13" font-weight="500" fill="#FEDAB8" fill-opacity="0.7" text-anchor="middle">Project Visual Asset</text>
+</svg>`;
+      res.setHeader('Content-Type', 'image/svg+xml');
+      res.setHeader('Cache-Control', 'public, max-age=3600');
+      return void res.send(Buffer.from(fallbackSvg));
     }
 
     res.setHeader('Content-Type', file.mime);

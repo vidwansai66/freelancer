@@ -43,19 +43,34 @@ export const PortfolioPage: React.FC = () => {
   }, [allProjects]);
 
   useEffect(() => {
-    setLoading(true);
-    projectsApi
-      .getAll({
-        category: selectedCategory === 'All' ? undefined : selectedCategory,
-        search: searchQuery || undefined,
-        status: 'published',
-        limit: 50,
-      })
-      .then((res) => {
-        setProjects(res.data || []);
-      })
-      .catch((err) => console.error(err))
-      .finally(() => setLoading(false));
+    let isCurrent = true;
+    const timer = setTimeout(() => {
+      setLoading(true);
+      projectsApi
+        .getAll({
+          category: selectedCategory === 'All' ? undefined : selectedCategory,
+          search: searchQuery.trim() || undefined,
+          status: 'published',
+          limit: 50,
+        })
+        .then((res) => {
+          if (!isCurrent) return;
+          const items = res.data || [];
+          setProjects(items);
+          if (allProjects.length === 0 && selectedCategory === 'All' && !searchQuery.trim()) {
+            setAllProjects(items);
+          }
+        })
+        .catch((err) => console.error(err))
+        .finally(() => {
+          if (isCurrent) setLoading(false);
+        });
+    }, searchQuery ? 250 : 0);
+
+    return () => {
+      isCurrent = false;
+      clearTimeout(timer);
+    };
   }, [selectedCategory, searchQuery]);
 
   return (
@@ -142,6 +157,10 @@ export const PortfolioPage: React.FC = () => {
                       src={project.featuredImage}
                       alt={project.title}
                       loading="lazy"
+                      onError={(e) => {
+                        (e.currentTarget as HTMLImageElement).src =
+                          'https://images.unsplash.com/photo-1460925895917-afdab827c52f?auto=format&fit=crop&w=1200&q=80';
+                      }}
                       className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
                     />
                     <span className="absolute top-3 right-3 rounded-full bg-black/60 backdrop-blur-md px-3 py-1 text-[11px] font-semibold text-emerald-400 border border-emerald-500/30">
